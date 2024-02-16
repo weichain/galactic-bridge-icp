@@ -1,1 +1,1 @@
-# glactic-bridge-icp
+# galactic-bridge-icp
