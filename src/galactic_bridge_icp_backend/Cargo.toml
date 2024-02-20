@@ -9,9 +9,9 @@ edition = "2021"
 name = "galactic_bridge_icp_backend"
 path = "src/main.rs"
 
+
 [dependencies]
-getrandom = { version = "0.2.3", features = ["js"]}
-rand = "0.7.3"
+getrandom = { version = "0.2", features = ["custom"] }
 
 askama = { version = "0.12.1", features = ["serde-json"] }
 candid = { version = "0.10.2" }
