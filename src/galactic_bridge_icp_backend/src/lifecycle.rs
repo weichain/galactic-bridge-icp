@@ -2,6 +2,7 @@
 use crate::lifecycle::init::InitArg;
 use crate::lifecycle::upgrade::UpgradeArg;
 use candid::{CandidType, Deserialize};
+use minicbor::{Decode, Encode};
 use std::fmt::{Display, Formatter};
 
 pub mod init;
@@ -14,10 +15,14 @@ pub enum MinterArg {
     UpgradeArg(UpgradeArg),
 }
 
-// TODO: ENCODE / DECODE minicbor
-#[derive(CandidType, Clone, Copy, Default, Deserialize, Debug, Eq, PartialEq, Hash)]
+#[derive(
+    CandidType, Clone, Copy, Default, Deserialize, Debug, Eq, PartialEq, Hash, Encode, Decode,
+)]
+#[cbor(index_only)]
 pub enum SolanaNetwork {
+    #[n(1)]
     Mainnet,
+    #[n(2)]
     #[default]
     Testnet,
 }
@@ -36,7 +41,7 @@ impl Display for SolanaNetwork {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             SolanaNetwork::Mainnet => write!(f, "Solana Mainnet"),
-            SolanaNetwork::Sepolia => write!(f, "Solana Sepolia"),
+            SolanaNetwork::Testnet => write!(f, "Solana Testnet"),
         }
     }
 }

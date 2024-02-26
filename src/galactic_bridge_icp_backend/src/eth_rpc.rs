@@ -2,10 +2,10 @@
 //! interface.
 
 use crate::endpoints::CandidBlockTag;
-use crate::eth_rpc_client::responses::TransactionReceipt;
 use crate::eth_rpc_error::{sanitize_send_raw_transaction_result, Parser};
 use crate::logs::{DEBUG, TRACE_HTTP};
 use crate::numeric::{BlockNumber, LogIndex, TransactionCount, Wei, WeiPerGas};
+use crate::solana_rpc_client::responses::TransactionReceipt;
 use crate::state::{mutate_state, State};
 use candid::{candid_method, CandidType, Principal};
 use ethnum;

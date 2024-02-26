@@ -1,7 +1,7 @@
 use crate::eth_rpc::{FixedSizeData, Hash, LogEntry};
-use crate::eth_rpc_client::{EthRpcClient, MultiCallError};
 use crate::logs::{DEBUG, INFO};
 use crate::numeric::{BlockNumber, LogIndex, Wei};
+use crate::solana_rpc_client::{MultiCallError, SolanaRpcClient};
 use crate::state::read_state;
 use candid::Principal;
 use hex_literal::hex;
@@ -82,7 +82,7 @@ pub async fn last_received_eth_events(
         ));
     }
 
-    let result = read_state(EthRpcClient::from_state)
+    let result = read_state(SolanaRpcClient::from_state)
         .eth_get_logs(GetLogsParam {
             from_block: from.into(),
             to_block: to.into(),

@@ -297,7 +297,7 @@ fn get_events(arg: GetEventsArg) -> GetEventsResult {
         AccessListItem, TransactionReceipt as CandidTransactionReceipt,
         TransactionStatus as CandidTransactionStatus, UnsignedTransaction,
     };
-    use galactic_bridge_icp_backend::eth_rpc_client::responses::TransactionReceipt;
+    use galactic_bridge_icp_backend::solana_rpc_client::responses::TransactionReceipt;
     use galactic_bridge_icp_backend::tx::Eip1559TransactionRequest;
     use serde_bytes::ByteBuf;
 
@@ -317,7 +317,8 @@ fn get_events(arg: GetEventsArg) -> GetEventsResult {
 
     fn map_unsigned_transaction(tx: Eip1559TransactionRequest) -> UnsignedTransaction {
         UnsignedTransaction {
-            chain_id: tx.chain_id.into(),
+            // TODO: no chain id
+            // chain_id: tx.chain_id.into(),
             nonce: tx.nonce.into(),
             max_priority_fee_per_gas: tx.max_priority_fee_per_gas.into(),
             max_fee_per_gas: tx.max_fee_per_gas.into(),
@@ -342,7 +343,7 @@ fn get_events(arg: GetEventsArg) -> GetEventsResult {
     }
 
     fn map_transaction_receipt(receipt: TransactionReceipt) -> CandidTransactionReceipt {
-        use galactic_bridge_icp_backend::eth_rpc_client::responses::TransactionStatus;
+        use galactic_bridge_icp_backend::solana_rpc_client::responses::TransactionStatus;
         CandidTransactionReceipt {
             block_hash: receipt.block_hash.to_string(),
             block_number: receipt.block_number.into(),

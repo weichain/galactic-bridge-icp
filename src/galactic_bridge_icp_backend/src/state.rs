@@ -1,9 +1,10 @@
 use crate::address::ecdsa_public_key_to_address;
 use crate::eth_logs::{EventSource, ReceivedEthEvent};
 use crate::eth_rpc::BlockTag;
-use crate::eth_rpc_client::responses::{TransactionReceipt, TransactionStatus};
 use crate::lifecycle::upgrade::UpgradeArg;
-use crate::lifecycle::EthereumNetwork;
+use crate::solana_rpc_client::responses::{TransactionReceipt, TransactionStatus};
+// TODO:
+use crate::lifecycle::SolanaNetwork;
 use crate::logs::DEBUG;
 use crate::numeric::{BlockNumber, LedgerBurnIndex, LedgerMintIndex, TransactionNonce, Wei};
 use crate::tx::TransactionPriceEstimate;
@@ -39,7 +40,7 @@ impl MintedEvent {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct State {
-    pub ethereum_network: EthereumNetwork,
+    pub ethereum_network: SolanaNetwork,
     pub ecdsa_key_name: String,
     pub ledger_id: Principal,
     pub ethereum_contract_address: Option<Address>,
@@ -236,7 +237,7 @@ impl State {
         );
     }
 
-    pub const fn ethereum_network(&self) -> EthereumNetwork {
+    pub const fn ethereum_network(&self) -> SolanaNetwork {
         self.ethereum_network
     }
 

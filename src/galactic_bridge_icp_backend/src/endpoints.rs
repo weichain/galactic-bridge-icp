@@ -224,7 +224,7 @@ pub mod events {
 
     #[derive(CandidType, Deserialize, Debug, Clone, PartialEq, Eq)]
     pub struct UnsignedTransaction {
-        pub chain_id: Nat,
+        // pub chain_id: Nat,
         pub nonce: Nat,
         pub max_priority_fee_per_gas: Nat,
         pub max_fee_per_gas: Nat,

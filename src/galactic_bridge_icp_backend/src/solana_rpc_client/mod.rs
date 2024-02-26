@@ -3,12 +3,12 @@ use crate::eth_rpc::{
     Hash, HttpOutcallError, HttpOutcallResult, HttpResponsePayload, JsonRpcResult, LogEntry,
     ResponseSizeEstimate, SendRawTransactionResult,
 };
-use crate::eth_rpc_client::providers::{RpcNodeProvider, MAINNET_PROVIDERS, TESTNET_PROVIDERS};
-use crate::eth_rpc_client::requests::GetTransactionCountParams;
-use crate::eth_rpc_client::responses::TransactionReceipt;
 use crate::lifecycle::SolanaNetwork;
 use crate::logs::{DEBUG, INFO};
 use crate::numeric::TransactionCount;
+use crate::solana_rpc_client::providers::{RpcNodeProvider, MAINNET_PROVIDERS, TESTNET_PROVIDERS};
+use crate::solana_rpc_client::requests::GetTransactionCountParams;
+use crate::solana_rpc_client::responses::TransactionReceipt;
 use crate::state::State;
 use ic_canister_log::log;
 use serde::{de::DeserializeOwned, Serialize};

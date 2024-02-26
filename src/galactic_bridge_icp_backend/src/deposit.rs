@@ -1,9 +1,10 @@
 use crate::eth_logs::{report_transaction_error, ReceivedEthEventError};
 use crate::eth_rpc::{BlockSpec, HttpOutcallError};
-use crate::eth_rpc_client::EthRpcClient;
+// TODO:
 use crate::guard::TimerGuard;
 use crate::logs::{DEBUG, INFO};
 use crate::numeric::{BlockNumber, LedgerMintIndex};
+use crate::solana_rpc_client::SolanaRpcClient;
 use crate::state::{
     audit::process_event, event::EventType, mutate_state, read_state, State, TaskType,
 };
@@ -255,7 +256,7 @@ pub async fn scrap_eth_logs() {
 
 pub async fn update_last_observed_block_number() -> Option<BlockNumber> {
     let block_height = read_state(State::ethereum_block_height);
-    match read_state(EthRpcClient::from_state)
+    match read_state(SolanaRpcClient::from_state)
         .eth_get_block_by_number(BlockSpec::Tag(block_height))
         .await
     {

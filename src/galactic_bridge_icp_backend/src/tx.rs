@@ -1,6 +1,6 @@
 use crate::eth_rpc::{FeeHistory, Hash};
-use crate::eth_rpc_client::responses::{TransactionReceipt, TransactionStatus};
 use crate::numeric::{BlockNumber, GasAmount, TransactionNonce, Wei, WeiPerGas};
+use crate::solana_rpc_client::responses::{TransactionReceipt, TransactionStatus};
 use crate::state::{lazy_call_ecdsa_public_key, read_state};
 use ethnum::u256;
 use ic_crypto_ecdsa_secp256k1::RecoveryId;
@@ -63,8 +63,9 @@ impl rlp::Encodable for AccessListItem {
 /// <https://eips.ethereum.org/EIPS/eip-1559>
 #[derive(Clone, Debug, Eq, PartialEq, Encode, Decode)]
 pub struct Eip1559TransactionRequest {
-    #[n(0)]
-    pub chain_id: u64,
+    // TODO: solana has no chain id, so we need to figure out how to handle this
+    // #[n(0)]
+    // pub chain_id: u64,
     #[n(1)]
     pub nonce: TransactionNonce,
     #[n(2)]
@@ -303,7 +304,7 @@ impl Eip1559TransactionRequest {
     }
 
     pub fn rlp_inner(&self, rlp: &mut RlpStream) {
-        rlp.append(&self.chain_id);
+        // rlp.append(&self.chain_id);
         rlp.append(&self.nonce);
         rlp.append(&self.max_priority_fee_per_gas);
         rlp.append(&self.max_fee_per_gas);
