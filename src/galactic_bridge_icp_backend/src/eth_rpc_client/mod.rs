@@ -3,10 +3,10 @@ use crate::eth_rpc::{
     Hash, HttpOutcallError, HttpOutcallResult, HttpResponsePayload, JsonRpcResult, LogEntry,
     ResponseSizeEstimate, SendRawTransactionResult,
 };
-use crate::eth_rpc_client::providers::{RpcNodeProvider, MAINNET_PROVIDERS, SEPOLIA_PROVIDERS};
+use crate::eth_rpc_client::providers::{RpcNodeProvider, MAINNET_PROVIDERS, TESTNET_PROVIDERS};
 use crate::eth_rpc_client::requests::GetTransactionCountParams;
 use crate::eth_rpc_client::responses::TransactionReceipt;
-use crate::lifecycle::EthereumNetwork;
+use crate::lifecycle::SolanaNetwork;
 use crate::logs::{DEBUG, INFO};
 use crate::numeric::TransactionCount;
 use crate::state::State;
@@ -20,12 +20,12 @@ pub mod requests;
 pub mod responses;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct EthRpcClient {
-    chain: EthereumNetwork,
+pub struct SolanaRpcClient {
+    chain: SolanaNetwork,
 }
 
-impl EthRpcClient {
-    const fn new(chain: EthereumNetwork) -> Self {
+impl SolanaRpcClient {
+    const fn new(chain: SolanaNetwork) -> Self {
         Self { chain }
     }
 
@@ -35,8 +35,8 @@ impl EthRpcClient {
 
     fn providers(&self) -> &[RpcNodeProvider] {
         match self.chain {
-            EthereumNetwork::Mainnet => &MAINNET_PROVIDERS,
-            EthereumNetwork::Sepolia => &SEPOLIA_PROVIDERS,
+            SolanaNetwork::Mainnet => &MAINNET_PROVIDERS,
+            SolanaNetwork::Testnet => &TESTNET_PROVIDERS,
         }
     }
 
@@ -137,8 +137,8 @@ impl EthRpcClient {
         use crate::eth_rpc::GetBlockByNumberParams;
 
         let expected_block_size = match self.chain {
-            EthereumNetwork::Sepolia => 12 * 1024,
-            EthereumNetwork::Mainnet => 24 * 1024,
+            SolanaNetwork::Testnet => 12 * 1024,
+            SolanaNetwork::Mainnet => 24 * 1024,
         };
 
         let results: MultiCallResults<Block> = self

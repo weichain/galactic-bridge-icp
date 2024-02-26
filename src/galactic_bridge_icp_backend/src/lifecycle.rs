@@ -2,7 +2,6 @@
 use crate::lifecycle::init::InitArg;
 use crate::lifecycle::upgrade::UpgradeArg;
 use candid::{CandidType, Deserialize};
-use minicbor::{Decode, Encode};
 use std::fmt::{Display, Formatter};
 
 pub mod init;
@@ -15,32 +14,29 @@ pub enum MinterArg {
     UpgradeArg(UpgradeArg),
 }
 
-#[derive(
-    CandidType, Clone, Copy, Default, Deserialize, Debug, Eq, PartialEq, Hash, Encode, Decode,
-)]
-#[cbor(index_only)]
-pub enum EthereumNetwork {
-    #[n(1)]
+// TODO: ENCODE / DECODE minicbor
+#[derive(CandidType, Clone, Copy, Default, Deserialize, Debug, Eq, PartialEq, Hash)]
+pub enum SolanaNetwork {
     Mainnet,
-    #[n(11155111)]
     #[default]
-    Sepolia,
+    Testnet,
 }
 
-impl EthereumNetwork {
-    pub fn chain_id(&self) -> u64 {
-        match self {
-            EthereumNetwork::Mainnet => 1,
-            EthereumNetwork::Sepolia => 11155111,
-        }
-    }
-}
+// TODO: solana doesn't have a chain id, so this is not used
+// impl EthereumNetwork {
+//     pub fn chain_id(&self) -> u64 {
+//         match self {
+//             EthereumNetwork::Mainnet => 1,
+//             EthereumNetwork::Sepolia => 11155111,
+//         }
+//     }
+// }
 
-impl Display for EthereumNetwork {
+impl Display for SolanaNetwork {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            EthereumNetwork::Mainnet => write!(f, "Ethereum Mainnet"),
-            EthereumNetwork::Sepolia => write!(f, "Ethereum Testnet Sepolia"),
+            SolanaNetwork::Mainnet => write!(f, "Solana Mainnet"),
+            SolanaNetwork::Sepolia => write!(f, "Solana Sepolia"),
         }
     }
 }

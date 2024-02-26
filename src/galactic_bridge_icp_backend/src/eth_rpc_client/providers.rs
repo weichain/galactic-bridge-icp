@@ -1,62 +1,48 @@
-pub(crate) const MAINNET_PROVIDERS: [RpcNodeProvider; 3] = [
-    RpcNodeProvider::Ethereum(EthereumProvider::Ankr),
-    RpcNodeProvider::Ethereum(EthereumProvider::PublicNode),
-    RpcNodeProvider::Ethereum(EthereumProvider::Cloudflare),
-];
+pub(crate) const MAINNET_PROVIDERS: [RpcNodeProvider; 1] =
+    [RpcNodeProvider::SolanaMainnet(SolanaMainnetProvider::Free)];
 
-pub(crate) const SEPOLIA_PROVIDERS: [RpcNodeProvider; 2] = [
-    RpcNodeProvider::Sepolia(SepoliaProvider::Ankr),
-    RpcNodeProvider::Sepolia(SepoliaProvider::PublicNode),
-];
+pub(crate) const TESTNET_PROVIDERS: [RpcNodeProvider; 1] =
+    [RpcNodeProvider::SolanaTestnet(SolanaTestnetProvider::Free)];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Ord, PartialOrd, Hash)]
 pub(crate) enum RpcNodeProvider {
-    Ethereum(EthereumProvider),
-    Sepolia(SepoliaProvider),
+    SolanaMainnet(SolanaMainnetProvider),
+    SolanaTestnet(SolanaTestnetProvider),
 }
 
 impl RpcNodeProvider {
     pub(crate) fn url(&self) -> &str {
         match self {
-            Self::Ethereum(provider) => provider.ethereum_mainnet_endpoint_url(),
-            Self::Sepolia(provider) => provider.ethereum_sepolia_endpoint_url(),
+            Self::SolanaMainnet(provider) => provider.solana_mainnet_endpoint_url(),
+            Self::SolanaTestnet(provider) => provider.solana_testnet_endpoint_url(),
         }
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Ord, PartialOrd, Hash)]
-pub(crate) enum EthereumProvider {
+pub(crate) enum SolanaMainnetProvider {
     // https://www.ankr.com/rpc/
-    Ankr,
-    // https://publicnode.com/
-    PublicNode,
-    // https://developers.cloudflare.com/web3/ethereum-gateway/
-    Cloudflare,
+    Free,
 }
 
-impl EthereumProvider {
-    fn ethereum_mainnet_endpoint_url(&self) -> &str {
+impl SolanaMainnetProvider {
+    fn solana_mainnet_endpoint_url(&self) -> &str {
         match self {
-            EthereumProvider::Ankr => "https://rpc.ankr.com/eth",
-            EthereumProvider::PublicNode => "https://ethereum.publicnode.com",
-            EthereumProvider::Cloudflare => "https://cloudflare-eth.com",
+            SolanaMainnetProvider::Free => "https://api.mainnet-beta.solana.com",
         }
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Ord, PartialOrd, Hash)]
-pub(crate) enum SepoliaProvider {
-    // https://www.ankr.com/rpc/
-    Ankr,
-    // https://publicnode.com/
-    PublicNode,
+pub(crate) enum SolanaTestnetProvider {
+    // https://api.testnet.solana.com
+    Free,
 }
 
-impl SepoliaProvider {
-    fn ethereum_sepolia_endpoint_url(&self) -> &str {
+impl SolanaTestnetProvider {
+    fn solana_testnet_endpoint_url(&self) -> &str {
         match self {
-            SepoliaProvider::Ankr => "https://rpc.ankr.com/eth_sepolia",
-            SepoliaProvider::PublicNode => "https://ethereum-sepolia.publicnode.com",
+            SolanaTestnetProvider::Free => "https://api.testnet.solana.com",
         }
     }
 }
