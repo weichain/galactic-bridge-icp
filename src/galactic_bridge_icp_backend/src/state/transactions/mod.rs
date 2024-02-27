@@ -2,7 +2,6 @@ use crate::endpoints::{EthTransaction, RetrieveEthStatus, TxFinalizedStatus};
 use crate::eth_rpc::Hash;
 use crate::eth_rpc_client::responses::TransactionReceipt;
 use crate::eth_rpc_client::responses::TransactionStatus;
-use crate::lifecycle::EthereumNetwork;
 use crate::map::MultiKeyMap;
 use crate::numeric::{LedgerBurnIndex, LedgerMintIndex, TransactionCount, TransactionNonce, Wei};
 use crate::tx::{
@@ -669,7 +668,6 @@ pub fn create_transaction(
     withdrawal_request: &EthWithdrawalRequest,
     nonce: TransactionNonce,
     transaction_price: TransactionPrice,
-    ethereum_network: EthereumNetwork,
 ) -> Result<Eip1559TransactionRequest, CreateTransactionError> {
     let max_transaction_fee = transaction_price.max_transaction_fee();
     let tx_amount = match withdrawal_request
@@ -686,7 +684,6 @@ pub fn create_transaction(
         }
     };
     Ok(Eip1559TransactionRequest {
-        chain_id: ethereum_network.chain_id(),
         nonce,
         max_priority_fee_per_gas: transaction_price.max_priority_fee_per_gas,
         max_fee_per_gas: transaction_price.max_fee_per_gas,

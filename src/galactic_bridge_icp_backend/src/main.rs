@@ -317,7 +317,6 @@ fn get_events(arg: GetEventsArg) -> GetEventsResult {
 
     fn map_unsigned_transaction(tx: Eip1559TransactionRequest) -> UnsignedTransaction {
         UnsignedTransaction {
-            chain_id: tx.chain_id.into(),
             nonce: tx.nonce.into(),
             max_priority_fee_per_gas: tx.max_priority_fee_per_gas.into(),
             max_fee_per_gas: tx.max_fee_per_gas.into(),

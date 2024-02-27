@@ -13,7 +13,7 @@ use crate::state::audit::{process_event, EventType};
 use crate::state::transactions::{
     create_transaction, CreateTransactionError, Reimbursed, ReimbursementRequest,
 };
-use crate::state::{mutate_state, read_state, State, TaskType};
+use crate::state::{mutate_state, read_state, TaskType};
 use crate::tx::{estimate_transaction_price, TransactionPrice};
 use candid::Nat;
 use futures::future::join_all;
@@ -233,9 +233,8 @@ fn create_transactions_batch(transaction_price: TransactionPrice) {
             .withdrawal_requests_batch(WITHDRAWAL_REQUESTS_BATCH_SIZE)
     }) {
         log!(DEBUG, "[create_transactions_batch]: processing {request:?}",);
-        let ethereum_network = read_state(State::ethereum_network);
         let nonce = read_state(|s| s.eth_transactions.next_transaction_nonce());
-        match create_transaction(&request, nonce, transaction_price.clone(), ethereum_network) {
+        match create_transaction(&request, nonce, transaction_price.clone()) {
             Ok(transaction) => {
                 log!(
                     DEBUG,

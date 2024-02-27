@@ -1,6 +1,6 @@
 use crate::endpoints::CandidBlockTag;
 use crate::eth_rpc::BlockTag;
-use crate::lifecycle::EthereumNetwork;
+use crate::lifecycle::SolanaNetwork;
 use crate::numeric::{BlockNumber, TransactionNonce, Wei};
 use crate::state::transactions::EthTransactions;
 use crate::state::{InvalidStateError, State};
@@ -13,7 +13,7 @@ use minicbor::{Decode, Encode};
 #[derive(CandidType, Deserialize, Clone, Debug, Encode, Decode, PartialEq, Eq)]
 pub struct InitArg {
     #[n(0)]
-    pub ethereum_network: EthereumNetwork,
+    pub solana_network: SolanaNetwork,
     #[n(1)]
     pub ecdsa_key_name: String,
     #[n(2)]
@@ -34,7 +34,7 @@ impl TryFrom<InitArg> for State {
     type Error = InvalidStateError;
     fn try_from(
         InitArg {
-            ethereum_network,
+            solana_network,
             ecdsa_key_name,
             ethereum_contract_address,
             ledger_id,
@@ -70,7 +70,7 @@ impl TryFrom<InitArg> for State {
                     )
                 })?;
         let state = Self {
-            ethereum_network,
+            solana_network,
             ecdsa_key_name,
             ethereum_contract_address,
             retrieve_eth_principals: Default::default(),
