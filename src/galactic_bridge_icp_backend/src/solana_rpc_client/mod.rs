@@ -8,13 +8,13 @@ use crate::logs::{DEBUG, INFO};
 use crate::numeric::TransactionCount;
 use crate::solana_rpc_client::providers::{RpcNodeProvider, MAINNET_PROVIDERS, TESTNET_PROVIDERS};
 use crate::solana_rpc_client::requests::GetTransactionCountParams;
-use crate::solana_rpc_client::responses::TransactionReceipt;
 use crate::state::State;
 use ic_canister_log::log;
 use serde::{de::DeserializeOwned, Serialize};
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 
+pub mod errors;
 mod providers;
 pub mod requests;
 pub mod responses;
@@ -30,7 +30,7 @@ impl SolanaRpcClient {
     }
 
     pub const fn from_state(state: &State) -> Self {
-        Self::new(state.ethereum_network())
+        Self::new(state.solana_network())
     }
 
     fn providers(&self) -> &[RpcNodeProvider] {
@@ -40,58 +40,10 @@ impl SolanaRpcClient {
         }
     }
 
-    /// Query all providers in sequence until one returns an ok result
-    /// (which could still be a JsonRpcResult::Error).
-    /// If none of the providers return an ok result, return the last error.
-    /// This method is useful in case a provider is temporarily down but should only be for
-    /// querying data that is **not** critical since the returned value comes from a single provider.
-    async fn sequential_call_until_ok<I, O>(
-        &self,
-        method: impl Into<String> + Clone,
-        params: I,
-        response_size_estimate: ResponseSizeEstimate,
-    ) -> HttpOutcallResult<JsonRpcResult<O>>
-    where
-        I: Serialize + Clone,
-        O: DeserializeOwned + HttpResponsePayload + Debug,
-    {
-        let mut last_result: Option<HttpOutcallResult<JsonRpcResult<O>>> = None;
-        for provider in self.providers() {
-            log!(
-                DEBUG,
-                "[sequential_call_until_ok]: calling provider: {:?}",
-                provider
-            );
-            let result = eth_rpc::call(
-                provider.url().to_string(),
-                method.clone(),
-                params.clone(),
-                response_size_estimate,
-            )
-            .await;
-            match result {
-                Ok(JsonRpcResult::Result(value)) => return Ok(JsonRpcResult::Result(value)),
-                Ok(json_rpc_error @ JsonRpcResult::Error { .. }) => {
-                    log!(
-                        INFO,
-                        "Provider {provider:?} returned JSON-RPC error {json_rpc_error:?}",
-                    );
-                    last_result = Some(Ok(json_rpc_error));
-                }
-                Err(e) => {
-                    log!(INFO, "Querying provider {provider:?} returned error {e:?}");
-                    last_result = Some(Err(e));
-                }
-            };
-        }
-        last_result.unwrap_or_else(|| panic!("BUG: No providers in RPC client {:?}", self))
-    }
-
     /// Query all providers in parallel and return all results.
     /// It's up to the caller to decide how to handle the results, which could be inconsistent among one another,
     /// (e.g., if different providers gave different responses).
     /// This method is useful for querying data that is critical for the system to ensure that there is no single point of failure,
-    /// e.g., ethereum logs upon which ckETH will be minted.
     async fn parallel_call<I, O>(
         &self,
         method: impl Into<String> + Clone,
@@ -119,90 +71,21 @@ impl SolanaRpcClient {
         MultiCallResults::from_non_empty_iter(providers.iter().cloned().zip(results.into_iter()))
     }
 
-    pub async fn eth_get_logs(
+    pub async fn get_signatures_for_address(
         &self,
-        params: GetLogsParam,
-    ) -> Result<Vec<LogEntry>, MultiCallError<Vec<LogEntry>>> {
-        // We expect most of the calls to contain zero events.
-        let results: MultiCallResults<Vec<LogEntry>> = self
-            .parallel_call("eth_getLogs", vec![params], ResponseSizeEstimate::new(100))
-            .await;
-        results.reduce_with_equality()
-    }
-
-    pub async fn eth_get_block_by_number(
-        &self,
-        block: BlockSpec,
-    ) -> Result<Block, MultiCallError<Block>> {
-        use crate::eth_rpc::GetBlockByNumberParams;
-
-        let expected_block_size = match self.chain {
-            SolanaNetwork::Testnet => 12 * 1024,
-            SolanaNetwork::Mainnet => 24 * 1024,
-        };
-
-        let results: MultiCallResults<Block> = self
+        params: requests::GetSignaturesForAddressRequest,
+    ) -> Result<
+        Option<responses::RpcConfirmedTransactionStatusWithSignature>,
+        MultiCallError<Option<responses::RpcConfirmedTransactionStatusWithSignature>>,
+    > {
+        let results: MultiCallResults<responses::RpcConfirmedTransactionStatusWithSignature> = self
             .parallel_call(
-                "eth_getBlockByNumber",
-                GetBlockByNumberParams {
-                    block,
-                    include_full_transactions: false,
-                },
-                ResponseSizeEstimate::new(expected_block_size),
+                "getSignaturesForAddress",
+                params,
+                ResponseSizeEstimate::new(512),
             )
             .await;
         results.reduce_with_equality()
-    }
-
-    pub async fn eth_get_transaction_receipt(
-        &self,
-        tx_hash: Hash,
-    ) -> Result<Option<TransactionReceipt>, MultiCallError<Option<TransactionReceipt>>> {
-        let results: MultiCallResults<Option<TransactionReceipt>> = self
-            .parallel_call(
-                "eth_getTransactionReceipt",
-                vec![tx_hash],
-                ResponseSizeEstimate::new(700),
-            )
-            .await;
-        results.reduce_with_equality()
-    }
-
-    pub async fn eth_fee_history(
-        &self,
-        params: FeeHistoryParams,
-    ) -> Result<FeeHistory, MultiCallError<FeeHistory>> {
-        // A typical response is slightly above 300 bytes.
-        let results: MultiCallResults<FeeHistory> = self
-            .parallel_call("eth_feeHistory", params, ResponseSizeEstimate::new(512))
-            .await;
-        results.reduce_with_strict_majority_by_key(|fee_history| fee_history.oldest_block)
-    }
-
-    pub async fn eth_send_raw_transaction(
-        &self,
-        raw_signed_transaction_hex: String,
-    ) -> HttpOutcallResult<JsonRpcResult<SendRawTransactionResult>> {
-        // A successful reply is under 256 bytes, but we expect most calls to end with an error
-        // since we submit the same transaction from multiple nodes.
-        self.sequential_call_until_ok(
-            "eth_sendRawTransaction",
-            vec![raw_signed_transaction_hex],
-            ResponseSizeEstimate::new(256),
-        )
-        .await
-    }
-
-    pub async fn eth_get_transaction_count(
-        &self,
-        params: GetTransactionCountParams,
-    ) -> MultiCallResults<TransactionCount> {
-        self.parallel_call(
-            "eth_getTransactionCount",
-            params,
-            ResponseSizeEstimate::new(50),
-        )
-        .await
     }
 }
 
@@ -271,11 +154,6 @@ impl<T: PartialEq> MultiCallResults<T> {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub enum SingleCallError {
-    HttpOutcallError(HttpOutcallError),
-    JsonRpcError { code: i64, message: String },
-}
 #[derive(Debug, PartialEq, Eq)]
 pub enum MultiCallError<T> {
     ConsistentHttpOutcallError(HttpOutcallError),

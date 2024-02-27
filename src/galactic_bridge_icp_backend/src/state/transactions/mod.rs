@@ -670,7 +670,7 @@ pub fn create_transaction(
     withdrawal_request: &EthWithdrawalRequest,
     nonce: TransactionNonce,
     transaction_price: TransactionPrice,
-    ethereum_network: SolanaNetwork,
+    solana_network: SolanaNetwork,
 ) -> Result<Eip1559TransactionRequest, CreateTransactionError> {
     let max_transaction_fee = transaction_price.max_transaction_fee();
     let tx_amount = match withdrawal_request
@@ -688,7 +688,7 @@ pub fn create_transaction(
     };
     Ok(Eip1559TransactionRequest {
         // TODO: no chain id
-        // chain_id: ethereum_network.chain_id(),
+        // chain_id: solana_network.chain_id(),
         nonce,
         max_priority_fee_per_gas: transaction_price.max_priority_fee_per_gas,
         max_fee_per_gas: transaction_price.max_fee_per_gas,

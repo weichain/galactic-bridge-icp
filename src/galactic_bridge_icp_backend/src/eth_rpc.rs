@@ -284,7 +284,7 @@ pub struct GetLogsParam {
 // ```
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct LogEntry {
+pub struct  LogEntry {
     /// The address from which this log originated.
     pub address: Address,
     /// Array of 0 to 4 32 Bytes DATA of indexed log arguments.
@@ -837,3 +837,26 @@ pub(super) mod metrics {
         METRICS.with(|metrics| metrics.borrow().encode(encoder))
     }
 }
+
+
+///// 
+
+use solana_sdk::signature::Signature;
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct Signature {
+    pub blockTime: ,
+    pub confirmationStatus: ,
+    pub err: ,
+    pub memo: ,
+    pub signature: "4Mi3Z2UqmeQo1yGfP3XBfxrUcXTxg1R7bYJqBGU5GzduzLyRYqdtZx5w9LYH2AdU4oZTYSC9XFvVcDfuyNiR6vBm",
+    pub slot:
+}
+// {
+//     "blockTime":1708948928,
+//     "confirmationStatus":"finalized",
+//     "err":null,
+//     "memo":null,
+//     "signature":"4Mi3Z2UqmeQo1yGfP3XBfxrUcXTxg1R7bYJqBGU5GzduzLyRYqdtZx5w9LYH2AdU4oZTYSC9XFvVcDfuyNiR6vBm",
+//     "slot":254962028
+// }

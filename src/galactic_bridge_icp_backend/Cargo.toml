@@ -11,8 +11,6 @@ path = "src/main.rs"
 
 
 [dependencies]
-getrandom = { version = "0.2", features = ["custom"] }
-
 askama = { version = "0.12.1", features = ["serde-json"] }
 candid = { version = "0.10.2" }
 candid_parser = { version = "0.1.2" }
@@ -40,12 +38,12 @@ strum_macros = "0.25.3"
 ic-stable-structures = "0.6.2"
 time = { version = "0.3.20", features = ["formatting"] }
 
-ic-ethereum-types = { git = "https://github.com/dfinity/ic.git"}
-phantom_newtype = { git = "https://github.com/dfinity/ic.git"}
-ic-utils-ensure = { git = "https://github.com/dfinity/ic.git"}
-ic-crypto-ecdsa-secp256k1 = { git = "https://github.com/dfinity/ic.git"}
-ic-crypto-sha3 = { git = "https://github.com/dfinity/ic.git"}
-icrc-ledger-client-cdk = { git = "https://github.com/dfinity/ic.git"}
-icrc-ledger-types = { git = "https://github.com/dfinity/ic.git"}
-ic-management-canister-types = { git = "https://github.com/dfinity/ic.git"}
-ic-canisters-http-types = { git = "https://github.com/dfinity/ic.git"}
+ic-ethereum-types = {git = "https://github.com/dfinity/ic.git"}
+phantom_newtype = {git = "https://github.com/dfinity/ic.git"}
+ic-utils-ensure = {git = "https://github.com/dfinity/ic.git"}
+ic-crypto-sha3 = {git = "https://github.com/dfinity/ic.git"}
+icrc-ledger-client-cdk = {git = "https://github.com/dfinity/ic.git"}
+icrc-ledger-types = {git = "https://github.com/dfinity/ic.git"}
+ic-management-canister-types = {git = "https://github.com/dfinity/ic.git"}
+ic-canisters-http-types = {git = "https://github.com/dfinity/ic.git"}
+ic-crypto-ecdsa-secp256k1 = {git = "https://github.com/dfinity/ic.git"}

@@ -1,7 +1,7 @@
 use crate::eth_rpc::{FixedSizeData, Hash, LogEntry};
 use crate::logs::{DEBUG, INFO};
 use crate::numeric::{BlockNumber, LogIndex, Wei};
-use crate::solana_rpc_client::{MultiCallError, SolanaRpcClient};
+use crate::solana_rpc_client::SolanaRpcClient;
 use crate::state::read_state;
 use candid::Principal;
 use hex_literal::hex;

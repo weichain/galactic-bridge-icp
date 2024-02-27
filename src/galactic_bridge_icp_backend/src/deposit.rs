@@ -1,6 +1,5 @@
 use crate::eth_logs::{report_transaction_error, ReceivedEthEventError};
 use crate::eth_rpc::{BlockSpec, HttpOutcallError};
-// TODO:
 use crate::guard::TimerGuard;
 use crate::logs::{DEBUG, INFO};
 use crate::numeric::{BlockNumber, LedgerMintIndex};

@@ -2,11 +2,10 @@ use crate::address::ecdsa_public_key_to_address;
 use crate::eth_logs::{EventSource, ReceivedEthEvent};
 use crate::eth_rpc::BlockTag;
 use crate::lifecycle::upgrade::UpgradeArg;
-use crate::solana_rpc_client::responses::{TransactionReceipt, TransactionStatus};
-// TODO:
 use crate::lifecycle::SolanaNetwork;
 use crate::logs::DEBUG;
 use crate::numeric::{BlockNumber, LedgerBurnIndex, LedgerMintIndex, TransactionNonce, Wei};
+use crate::solana_rpc_client::responses::{TransactionReceipt, TransactionStatus};
 use crate::tx::TransactionPriceEstimate;
 use candid::Principal;
 use ic_canister_log::log;
@@ -40,7 +39,7 @@ impl MintedEvent {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct State {
-    pub ethereum_network: SolanaNetwork,
+    pub solana_network: SolanaNetwork,
     pub ecdsa_key_name: String,
     pub ledger_id: Principal,
     pub ethereum_contract_address: Option<Address>,
@@ -237,8 +236,8 @@ impl State {
         );
     }
 
-    pub const fn ethereum_network(&self) -> SolanaNetwork {
-        self.ethereum_network
+    pub const fn solana_network(&self) -> SolanaNetwork {
+        self.solana_network
     }
 
     pub const fn ethereum_block_height(&self) -> BlockTag {
@@ -288,7 +287,7 @@ impl State {
         // 2. Transient fields, such as `active_tasks`.
         use ic_utils_ensure::ensure_eq;
 
-        ensure_eq!(self.ethereum_network, other.ethereum_network);
+        ensure_eq!(self.solana_network, other.solana_network);
         ensure_eq!(self.ledger_id, other.ledger_id);
         ensure_eq!(self.ecdsa_key_name, other.ecdsa_key_name);
         ensure_eq!(
