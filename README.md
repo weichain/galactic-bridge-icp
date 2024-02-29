@@ -17,7 +17,7 @@ dfx start --background
 
 # Flow examples
 
-=== Sol to ckSol
+### Sol to ckSol
 ```
 ┌────┐ ┌───────────────┐           ┌──────────┐┌──────────┐
 │User│ │Solana Contract│           │  Minter  ││  Ledger  │
@@ -36,7 +36,7 @@ dfx start --background
 └────┘ └───────────────┘           └──────────┘└──────────┘
 ```
 
-=== ckSol to Sol
+### ckSol to Sol
 ```
  ┌───────────────┐ ┌────┐             ┌──────────┐┌──────────┐
  │Solana Contract│ │User│             │  Minter  ││  Ledger  │
