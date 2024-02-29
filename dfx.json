@@ -2,8 +2,8 @@
   "canisters": {
     "minter": {
       "type": "rust",
-      "candid": "src/galactic_bridge_icp_backend/galactic_bridge_icp_backend.did",
-      "package": "galactic_bridge_icp_backend",
+      "package": "minter",
+      "candid": "src/minter/minter.did",
       "shrink": false
     },
     "ledger": {
