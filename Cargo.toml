@@ -1,0 +1,5 @@
+[workspace]
+members = [
+    "src/minter",
+]
+resolver = "2"
