@@ -46,7 +46,7 @@ pub fn init(args: InitArgs) {
 }
 
 #[update]
-pub async fn get_address() -> (Vec<u8>, String, String, String) {
+pub async fn get_address() -> (String, String, String) {
     use libsecp256k1::{PublicKey, PublicKeyFormat};
 
     let derivation_path = DERIVATION_PATH.with(|d| d.clone());
@@ -65,7 +65,6 @@ pub async fn get_address() -> (Vec<u8>, String, String, String) {
     result.copy_from_slice(&hash[12..]);
 
     return (
-        public_key,
         hex_string,
         hex::encode(uncompressed_pubkey),
         hex::encode(result),
@@ -73,7 +72,7 @@ pub async fn get_address() -> (Vec<u8>, String, String, String) {
 }
 
 #[update]
-pub async fn sign() -> (String, Vec<u8>, String, String) {
+pub async fn sign() -> (String, String, String) {
     let derivation_path = DERIVATION_PATH.with(|d| d.clone());
     let key_name = KEY_NAME.with(|kn| kn.borrow().to_string());
 
@@ -98,12 +97,7 @@ pub async fn sign() -> (String, Vec<u8>, String, String) {
     let signature = sign_with_ecdsa(key_name, derivation_path, hashed_coupon_bytes).await;
     let signature_hex_string = hex::encode(&signature);
 
-    return (
-        serialized_coupon,
-        signature,
-        signature_hex_string,
-        coupon_hex_string,
-    );
+    return (serialized_coupon, coupon_hex_string, signature_hex_string);
 }
 
 #[update]
@@ -148,6 +142,9 @@ async fn burn(amount: Nat) -> Nat {
         runtime: CdkRuntime,
         ledger_canister_id: LEDGER_CANISTER_ID.with(|d| d.borrow().clone()),
     };
+
+    ic_cdk::println!("caller: {:?}", caller.to_string());
+    ic_cdk::println!("id: {:?}", ic_cdk::id().to_string());
 
     let args = TransferFromArgs {
         spender_subaccount: None,
