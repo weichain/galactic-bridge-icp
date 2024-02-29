@@ -116,6 +116,8 @@ dfx canister call minter get_ledger_id
 ```
 
 ## mint
+Mint method manually generates ckSol asset.
+This functionality will become part of solana scrapper.
 
 ```bash
 dfx canister call minter mint "(principal \"$USER_PRINCIPAL\", 1_000)"
@@ -124,6 +126,8 @@ dfx canister call ledger icrc1_balance_of "(record { owner = principal \"$USER_P
 ```
 
 ## burn
+Mint method manually removes ckSol asset.
+This functionality will become part of the withdraw flow.
 
 ```bash
 dfx canister call ledger icrc2_approve "(record {
