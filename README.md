@@ -1,6 +1,6 @@
 # galactic_bridge_icp
 
-### Deployment
+## Deployment
 Deploys ledger and minter
 
 ```bash
@@ -10,14 +10,14 @@ dfx start --background
 ./scripts/deploy_all.sh
 ```
 
-### (Re)Generating candid file (minter.did)
+## (Re)Generating candid file (minter.did)
 ```bash
 ./scripts/did.sh
 ```
 
 # Flow examples
 
-### Sol to ckSol
+## Sol to ckSol
 ```
 ┌────┐ ┌───────────────┐           ┌──────────┐┌──────────┐
 │User│ │Solana Contract│           │  Minter  ││  Ledger  │
@@ -36,7 +36,7 @@ dfx start --background
 └────┘ └───────────────┘           └──────────┘└──────────┘
 ```
 
-### ckSol to Sol
+## ckSol to Sol
 ```
  ┌───────────────┐ ┌────┐             ┌──────────┐┌──────────┐
  │Solana Contract│ │User│             │  Minter  ││  Ledger  │
@@ -57,11 +57,10 @@ dfx start --background
  │Solana Contract│ │User│             │  Minter  ││  Ledger  │
  └───────────────┘ └────┘             └──────────┘└──────────┘
 ```
+Coupon holds message(address to receive asset, amount, etc.), signature and public address and is used to release SOL from solana contract
 
-# Coupon holds message(address to receive asset, amount, etc.), signature and public address and is used to release SOL from solana contract
 
-
-### Help
+# Help
 
 ## get_address
 Returns Threshold ECDSA address ("ecdsa_public_key") in 3 formats:
