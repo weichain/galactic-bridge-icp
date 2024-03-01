@@ -54,9 +54,3 @@ pub struct Coupon {
     pub address: String,
     pub amount: u64,
 }
-
-#[derive(CandidType, Serialize, Deserialize, Clone, Debug, Hash, PartialEq)]
-
-pub struct InitArgs {
-    pub ledger_id: Principal,
-}

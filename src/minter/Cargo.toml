@@ -5,8 +5,10 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[lib]
-crate-type = ["cdylib"]
+[[bin]]
+name = "minter"
+path = "src/main.rs"
+
 
 [dependencies]
 candid = "0.10.3"
@@ -16,6 +18,7 @@ ic-cdk-macros = "0.8.4"
 k256 = { version = "0.12.0", features = ["ecdsa"] }
 serde = "1.0.196"
 serde_json = "1.0.113"
+serde_bytes = "0.11"
 sha2 = "0.10.8"
 # Enable `custom` feature of k256's getrandom dependency. See lib.rs for more details.
 getrandom = { version = "0.2", features = ["custom"] }
@@ -28,3 +31,10 @@ num-traits = "0.2.18"
 icrc-ledger-client-cdk = { git = "https://github.com/dfinity/ic.git"}
 icrc-ledger-types = { git = "https://github.com/dfinity/ic.git"}
 ic-base-types = { git = "https://github.com/dfinity/ic.git"}
+
+# NEW
+phantom_newtype = { git = "https://github.com/dfinity/ic.git"}
+minicbor = { version = "0.19.1", features = ["alloc", "derive"] }
+minicbor-derive = "0.13.0"
+num-bigint = "0.4.4"
+ic-canister-log = "0.2.0"
