@@ -1,9 +1,12 @@
+use crate::constants::DERIVATION_PATH;
 use crate::lifecycle::SolanaNetwork;
+use crate::logs::DEBUG;
+
 use candid::Principal;
+use ic_canister_log::log;
+use ic_cdk::api::management_canister::ecdsa::EcdsaPublicKeyResponse;
 use num_bigint::BigUint;
 use std::cell::RefCell;
-
-use ic_cdk::api::management_canister::ecdsa::EcdsaPublicKeyResponse;
 
 thread_local! {
   pub static STATE: RefCell<Option<State>> = RefCell::default();
@@ -25,6 +28,7 @@ pub struct State {
     pub solana_contract_address: String,
 
     pub ecdsa_key_name: String,
+    // raw format of the public key
     pub ecdsa_public_key: Option<EcdsaPublicKeyResponse>,
     pub ledger_id: Principal,
     pub minimum_withdrawal_amount: BigUint,
@@ -81,6 +85,33 @@ impl State {
         }
         Ok(())
     }
+
+    // compressed public key in hex format - 33 bytes
+    pub fn compressed_public_key(&self) -> String {
+        let public_key = match &self.ecdsa_public_key {
+            Some(response) => &response.public_key,
+            None => ic_cdk::trap("BUG: public key is not initialized"),
+        };
+
+        hex::encode(&public_key)
+    }
+
+    // uncompressed public key in hex format - 65 bytes
+    pub fn uncompressed_public_key(&self) -> String {
+        use libsecp256k1::{PublicKey, PublicKeyFormat};
+
+        let public_key = match &self.ecdsa_public_key {
+            Some(response) => &response.public_key,
+            None => ic_cdk::trap("BUG: public key is not initialized"),
+        };
+
+        let uncompressed_pubkey =
+            PublicKey::parse_slice(&public_key, Some(PublicKeyFormat::Compressed))
+                .expect("failed to deserialize sec1 encoding into public key")
+                .serialize();
+
+        hex::encode(uncompressed_pubkey)
+    }
 }
 
 pub fn read_state<R>(f: impl FnOnce(&State) -> R) -> R {
@@ -99,4 +130,44 @@ where
             .as_mut()
             .expect("BUG: state is not initialized"))
     })
+}
+
+pub async fn lazy_call_ecdsa_public_key() -> ic_crypto_ecdsa_secp256k1::PublicKey {
+    use ic_cdk::api::management_canister::ecdsa::{
+        ecdsa_public_key, EcdsaCurve, EcdsaKeyId, EcdsaPublicKeyArgument,
+    };
+
+    fn to_public_key(response: &EcdsaPublicKeyResponse) -> ic_crypto_ecdsa_secp256k1::PublicKey {
+        ic_crypto_ecdsa_secp256k1::PublicKey::deserialize_sec1(&response.public_key).unwrap_or_else(
+            |e| ic_cdk::trap(&format!("failed to decode minter's public key: {:?}", e)),
+        )
+    }
+
+    if let Some(ecdsa_pk_response) = read_state(|s| s.ecdsa_public_key.clone()) {
+        return to_public_key(&ecdsa_pk_response);
+    }
+
+    let key_name = read_state(|s| s.ecdsa_key_name.clone());
+
+    log!(DEBUG, "Fetching the ECDSA public key {key_name}");
+
+    let (response,) = ecdsa_public_key(EcdsaPublicKeyArgument {
+        canister_id: None,
+        derivation_path: DERIVATION_PATH.into_iter().map(|x| x.to_vec()).collect(),
+        key_id: EcdsaKeyId {
+            curve: EcdsaCurve::Secp256k1,
+            name: key_name,
+        },
+    })
+    .await
+    .unwrap_or_else(|(error_code, message)| {
+        ic_cdk::trap(&format!(
+            "failed to get minter's public key: {} (error code = {:?})",
+            message, error_code,
+        ))
+    });
+
+    mutate_state(|s| s.ecdsa_public_key = Some(response.clone()));
+
+    to_public_key(&response)
 }

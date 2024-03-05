@@ -1,7 +1,7 @@
 use minter::constants::DERIVATION_PATH;
 use minter::lifecycle::MinterArg;
 use minter::logs::INFO;
-use minter::state::{read_state, State, STATE};
+use minter::state::{lazy_call_ecdsa_public_key, read_state, State, STATE};
 use minter::types::{
     Coupon, ECDSAPublicKey, ECDSAPublicKeyReply, EcdsaCurve, EcdsaKeyId, SignWithECDSA,
     SignWithECDSAReply, SignatureVerificationReply,
@@ -16,12 +16,24 @@ use icrc_ledger_types::{icrc1::transfer::TransferArg, icrc2::transfer_from::Tran
 use num_traits::ToPrimitive;
 use serde_json;
 use sha2::{Digest, Sha256};
+use std::time::Duration;
+
+fn setup_timers() {
+    ic_cdk_timers::set_timer(Duration::from_secs(0), || {
+        // Initialize the minter's public key to make the address known.
+        ic_cdk::spawn(async {
+            let _ = lazy_call_ecdsa_public_key().await;
+        })
+    });
+}
 
 #[candid_method(init)]
 #[init]
 pub fn init(args: MinterArg) {
     match args {
         MinterArg::Init(init_arg) => {
+            ic_cdk::println!("init_arg: {:?}", init_arg);
+
             log!(INFO, "[init]: initialized minter with arg: {:?}", init_arg);
             STATE.with(|cell| {
                 // TODO: record the event, how events work?
@@ -34,62 +46,45 @@ pub fn init(args: MinterArg) {
             ic_cdk::trap("cannot init canister state with upgrade args");
         }
     }
+
+    setup_timers();
 }
 
 #[update]
-pub async fn get_address() -> (String, String, String) {
-    use libsecp256k1::{PublicKey, PublicKeyFormat};
+pub async fn get_address() -> () {
+    let keys = read_state(|s| (s.compressed_public_key(), s.uncompressed_public_key()));
 
-    let derivation_path = DERIVATION_PATH.clone();
-    let key_name = read_state(|s| s.ecdsa_key_name.clone());
-
-    let public_key = ecdsa_public_key(key_name, derivation_path).await;
-    let hex_string = hex::encode(&public_key);
-
-    let uncompressed_pubkey =
-        PublicKey::parse_slice(&public_key, Some(PublicKeyFormat::Compressed))
-            .expect("failed to deserialize sec1 encoding into public key")
-            .serialize();
-
-    let hash = keccak256(&uncompressed_pubkey[1..65]);
-    let mut result = [0u8; 20];
-    result.copy_from_slice(&hash[12..]);
-
-    return (
-        hex_string,
-        hex::encode(uncompressed_pubkey),
-        hex::encode(result),
-    );
+    ic_cdk::println!("compressed_public_key: {:?}", keys.0);
+    ic_cdk::println!("uncompressed_public_key: {:?}", keys.1);
 }
 
-#[update]
-pub async fn sign() -> (String, String, String) {
-    let key_name = read_state(|s| s.ecdsa_key_name.clone());
+// #[update]
+// pub async fn sign() -> (String, String, String) {
+//     let key_name = read_state(|s| s.ecdsa_key_name.clone());
 
-    let coupon = Coupon {
-        address: "0xb12B5e756A894775FC32EDdf3314Bb1B1944dC34".to_string(),
-        amount: 1_000_000_000,
-    };
+//     let coupon = Coupon {
+//         address: "0xb12B5e756A894775FC32EDdf3314Bb1B1944dC34".to_string(),
+//         amount: 1_000_000_000,
+//     };
 
-    // Serialize the coupon
-    let serialized_coupon: String = serde_json::to_string(&coupon).unwrap();
+//     // Serialize the coupon
+//     let serialized_coupon: String = serde_json::to_string(&coupon).unwrap();
 
-    // Hash the serialized coupon using SHA-256
-    let mut hasher = Sha256::new();
-    hasher.update(serialized_coupon.clone());
-    let hashed_coupon = hasher.finalize();
+//     // Hash the serialized coupon using SHA-256
+//     let mut hasher = Sha256::new();
+//     hasher.update(serialized_coupon.clone());
+//     let hashed_coupon = hasher.finalize();
 
-    // Convert the hashed coupon into a Vec<u8>
-    let hashed_coupon_bytes = hashed_coupon.to_vec();
-    let coupon_hex_string = hex::encode(&hashed_coupon_bytes);
+//     // Convert the hashed coupon into a Vec<u8>
+//     let hashed_coupon_bytes = hashed_coupon.to_vec();
+//     let coupon_hex_string = hex::encode(&hashed_coupon_bytes);
 
-    // Sign the hashed coupon using ECDSA
-    let derivation_path = DERIVATION_PATH.clone();
-    let signature = sign_with_ecdsa(key_name, derivation_path, hashed_coupon_bytes).await;
-    let signature_hex_string = hex::encode(&signature);
+//     // Sign the hashed coupon using ECDSA
+//     let signature = sign_with_ecdsa(key_name, DERIVATION_PATH, hashed_coupon_bytes).await;
+//     let signature_hex_string = hex::encode(&signature);
 
-    return (serialized_coupon, coupon_hex_string, signature_hex_string);
-}
+//     return (serialized_coupon, coupon_hex_string, signature_hex_string);
+// }
 
 #[update]
 async fn mint(user: Principal, amount: Nat) -> Nat {
@@ -227,26 +222,26 @@ async fn get_ledger_id() -> String {
 // The fee for the `sign_with_ecdsa` endpoint using the test key.
 const SIGN_WITH_ECDSA_COST_CYCLES: u64 = 10_000_000_000;
 
-/// Returns the ECDSA public key of this canister at the given derivation path.
-async fn ecdsa_public_key(key_name: String, derivation_path: Vec<Vec<u8>>) -> Vec<u8> {
-    // Retrieve the public key of this canister at the given derivation path
-    // from the ECDSA API.
-    let res: Result<(ECDSAPublicKeyReply,), _> = call(
-        Principal::management_canister(),
-        "ecdsa_public_key",
-        (ECDSAPublicKey {
-            canister_id: None,
-            derivation_path,
-            key_id: EcdsaKeyId {
-                curve: EcdsaCurve::Secp256k1,
-                name: key_name,
-            },
-        },),
-    )
-    .await;
+// /// Returns the ECDSA public key of this canister at the given derivation path.
+// async fn ecdsa_public_key(key_name: String, derivation_path: Vec<Vec<u8>>) -> Vec<u8> {
+//     // Retrieve the public key of this canister at the given derivation path
+//     // from the ECDSA API.
+//     let res: Result<(ECDSAPublicKeyReply,), _> = call(
+//         Principal::management_canister(),
+//         "ecdsa_public_key",
+//         (ECDSAPublicKey {
+//             canister_id: None,
+//             derivation_path,
+//             key_id: EcdsaKeyId {
+//                 curve: EcdsaCurve::Secp256k1,
+//                 name: key_name,
+//             },
+//         },),
+//     )
+//     .await;
 
-    res.unwrap().0.public_key
-}
+//     res.unwrap().0.public_key
+// }
 
 async fn sign_with_ecdsa(
     key_name: String,

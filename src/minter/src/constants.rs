@@ -1,3 +1,5 @@
+use serde_bytes::ByteBuf;
+
 // The derivation path to use for ECDSA secp256k1.
 // First component: Hardened derivation for purpose (44')
 // vec![0x80, 44],
@@ -9,4 +11,4 @@
 // vec![0],
 // Fifth component: Non-hardened derivation for index (0)
 // vec![1],
-pub static DERIVATION_PATH: Vec<Vec<u8>> = vec![];
+pub const DERIVATION_PATH: Vec<ByteBuf> = vec![];

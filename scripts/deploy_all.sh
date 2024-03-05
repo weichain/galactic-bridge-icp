@@ -28,12 +28,12 @@ dfx deploy ledger --upgrade-unchanged --argument "
   })
 "
 
-dfx deploy minter --upgrade-unchanged  --argument "
+dfx deploy minter --upgrade-unchanged --mode reinstall --argument "
   (variant {
     Init = record {
       solana_network = variant { Testnet };
       solana_contract_address = \"asd\";
-      ecdsa_key_name = \"asd\";
+      ecdsa_key_name = \"dfx_test_key\";
       ledger_id = principal \"$(dfx canister id ledger)\";
       minimum_withdrawal_amount = 100;
     }
