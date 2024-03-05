@@ -21,7 +21,7 @@ use sha2::{Digest, Sha256};
 #[init]
 pub fn init(args: MinterArg) {
     match args {
-        MinterArg::InitArg(init_arg) => {
+        MinterArg::Init(init_arg) => {
             log!(INFO, "[init]: initialized minter with arg: {:?}", init_arg);
             STATE.with(|cell| {
                 // TODO: record the event, how events work?
@@ -30,7 +30,7 @@ pub fn init(args: MinterArg) {
                     Some(State::try_from(init_arg).expect("BUG: failed to initialize minter"))
             });
         }
-        MinterArg::UpgradeArg(_) => {
+        MinterArg::Upgrade(_) => {
             ic_cdk::trap("cannot init canister state with upgrade args");
         }
     }
@@ -68,7 +68,7 @@ pub async fn sign() -> (String, String, String) {
 
     let coupon = Coupon {
         address: "0xb12B5e756A894775FC32EDdf3314Bb1B1944dC34".to_string(),
-        amount: 10_000_000_000_000_000_000,
+        amount: 1_000_000_000,
     };
 
     // Serialize the coupon

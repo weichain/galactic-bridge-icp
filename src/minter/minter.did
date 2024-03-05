@@ -1,7 +1,19 @@
-type InitArgs = record { ledger_id : principal };
+type InitArg = record {
+  ecdsa_key_name : text;
+  solana_network : SolanaNetwork;
+  ledger_id : principal;
+  solana_contract_address : text;
+  minimum_withdrawal_amount : nat;
+};
+type MinterArg = variant { Upgrade : UpgradeArg; Init : InitArg };
 type Result = variant { Ok : SignatureVerificationReply; Err : text };
 type SignatureVerificationReply = record { is_signature_valid : bool };
-service : (InitArgs) -> {
+type SolanaNetwork = variant { Mainnet; Testnet };
+type UpgradeArg = record {
+  solana_contract_address : opt text;
+  minimum_withdrawal_amount : opt nat;
+};
+service : (MinterArg) -> {
   burn : (nat) -> (nat);
   get_address : () -> (text, text, text);
   get_ledger_id : () -> (text) query;

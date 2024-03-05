@@ -63,8 +63,8 @@ pub struct UpgradeArg {
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
 pub enum MinterArg {
-    InitArg(InitArg),
-    UpgradeArg(UpgradeArg),
+    Init(InitArg),
+    Upgrade(UpgradeArg),
 }
 
 #[derive(
