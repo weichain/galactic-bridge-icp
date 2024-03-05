@@ -6,7 +6,8 @@ use candid::Principal;
 use ic_canister_log::log;
 use ic_cdk::api::management_canister::ecdsa::EcdsaPublicKeyResponse;
 use num_bigint::BigUint;
-use std::cell::RefCell;
+use std::{cell::RefCell, collections::HashSet};
+use strum_macros::EnumIter;
 
 thread_local! {
   pub static STATE: RefCell<Option<State>> = RefCell::default();
@@ -22,6 +23,15 @@ pub enum InvalidStateError {
     // InvalidLastScrapedTransaction(String),
 }
 
+#[derive(Debug, Hash, Copy, Clone, PartialEq, Eq, EnumIter)]
+pub enum TaskType {
+    MintCkSol,
+    RetrieveSol,
+    ScrapSolLogs,
+    // TODO: what is Reimbursement and RetrieveSol
+    Reimbursement,
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct State {
     pub solana_network: SolanaNetwork,
@@ -32,6 +42,9 @@ pub struct State {
     pub ecdsa_public_key: Option<EcdsaPublicKeyResponse>,
     pub ledger_id: Principal,
     pub minimum_withdrawal_amount: BigUint,
+
+    /// Locks preventing concurrent execution timer tasks
+    pub active_tasks: HashSet<TaskType>,
     // TODO: implement types
     // pub first_scraped_transaction: SomeType,
     // pub last_scraped_transaction: SomeType,
@@ -51,8 +64,7 @@ pub struct State {
     // pub eth_balance: EthBalance,
     // /// Per-principal lock for pending_retrieve_eth_requests
     // pub retrieve_eth_principals: BTreeSet<Principal>,
-    // /// Locks preventing concurrent execution timer tasks
-    // pub active_tasks: HashSet<TaskType>,
+
     // /// Number of HTTP outcalls since the last upgrade.
     // /// Used to correlate request and response in logs.
     // pub http_request_counter: u64,

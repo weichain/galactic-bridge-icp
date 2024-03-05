@@ -44,6 +44,7 @@ impl TryFrom<InitArg> for State {
             ecdsa_public_key: None,
             ledger_id,
             minimum_withdrawal_amount,
+            active_tasks: Default::default(),
         };
         state.validate_config()?;
         Ok(state)

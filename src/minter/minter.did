@@ -15,7 +15,7 @@ type UpgradeArg = record {
 };
 service : (MinterArg) -> {
   burn : (nat) -> (nat);
-  get_address : () -> ();
+  get_address : () -> (text, text);
   get_ledger_id : () -> (text) query;
   mint : (principal, nat) -> (nat);
   verify : (text, text, text) -> (Result) query;

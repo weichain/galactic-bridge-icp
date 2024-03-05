@@ -1,4 +1,5 @@
 use minter::constants::DERIVATION_PATH;
+use minter::deposit::scrap_eth_logs;
 use minter::lifecycle::MinterArg;
 use minter::logs::INFO;
 use minter::state::{lazy_call_ecdsa_public_key, read_state, State, STATE};
@@ -25,6 +26,9 @@ fn setup_timers() {
             let _ = lazy_call_ecdsa_public_key().await;
         })
     });
+
+    // Start scraping logs immediately after the install, then repeat with the interval.
+    ic_cdk_timers::set_timer(Duration::from_secs(0), || ic_cdk::spawn(scrap_eth_logs()));
 }
 
 #[candid_method(init)]
@@ -51,11 +55,8 @@ pub fn init(args: MinterArg) {
 }
 
 #[update]
-pub async fn get_address() -> () {
-    let keys = read_state(|s| (s.compressed_public_key(), s.uncompressed_public_key()));
-
-    ic_cdk::println!("compressed_public_key: {:?}", keys.0);
-    ic_cdk::println!("uncompressed_public_key: {:?}", keys.1);
+pub async fn get_address() -> (String, String) {
+    read_state(|s| (s.compressed_public_key(), s.uncompressed_public_key()))
 }
 
 // #[update]
