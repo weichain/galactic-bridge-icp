@@ -78,7 +78,7 @@ pub async fn sign() -> (String, String, String) {
 
     let coupon = Coupon {
         address: "9gVndQ5SdugdFfGzyuKmePLRJZkCreKZ2iUTEg4agR5g".to_string(),
-        amount: 10_000_000_000,
+        amount: 10_000_000,
     };
 
     // Serialize the coupon

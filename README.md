@@ -77,7 +77,7 @@ Signs a predefined message with "sign_with_ecdsa":
 ```
     let coupon = Coupon {
         address: "9gVndQ5SdugdFfGzyuKmePLRJZkCreKZ2iUTEg4agR5g".to_string(),
-        amount: 10_000_000_000,
+        amount: 10_000_000,
     };
 ```
 
@@ -102,7 +102,7 @@ true/false
 Example:
 ```bash
 dfx canister call minter verify \
-  '("11423bfa8d4899d97318a846f799520c49a3c36e4ef499f35d5b9a480edbc6393760740a6f6194550439b29d815357e0fb07574f4157bc82ac3c9c9f7702b8a8", "{\"address\":\"9gVndQ5SdugdFfGzyuKmePLRJZkCreKZ2iUTEg4agR5g\",\"amount\":10000000000}", "020ab24d427257b0a726c5c8d3cad5fed2cfcd44a4ffa93f4ce239af2a4bce32e2")'
+  '("fff722f41eb1cae151458c2d9acf16695984d1376a6a0a6ab56a385204f889370aec600906f278c5d9522d1df16ab50940827f96d7f62f61cd2ba33b28f2b7df", "{\"address\":\"9gVndQ5SdugdFfGzyuKmePLRJZkCreKZ2iUTEg4agR5g\",\"amount\":10000000}", "0269b3e4f4295275d99217c8d4f31a872d7af55c671fde7b0ed293650f9d1a4115")'
 ```
 
 ## y_parity / recovery id
@@ -116,7 +116,7 @@ Recovery id -> 0/1
 
 ```bash
 dfx canister call minter y_parity \
-  '("11423bfa8d4899d97318a846f799520c49a3c36e4ef499f35d5b9a480edbc6393760740a6f6194550439b29d815357e0fb07574f4157bc82ac3c9c9f7702b8a8", "{\"address\":\"9gVndQ5SdugdFfGzyuKmePLRJZkCreKZ2iUTEg4agR5g\",\"amount\":10000000000}", "020ab24d427257b0a726c5c8d3cad5fed2cfcd44a4ffa93f4ce239af2a4bce32e2")'
+  '("fff722f41eb1cae151458c2d9acf16695984d1376a6a0a6ab56a385204f889370aec600906f278c5d9522d1df16ab50940827f96d7f62f61cd2ba33b28f2b7df", "{\"address\":\"9gVndQ5SdugdFfGzyuKmePLRJZkCreKZ2iUTEg4agR5g\",\"amount\":10000000}", "0269b3e4f4295275d99217c8d4f31a872d7af55c671fde7b0ed293650f9d1a4115")'
 
 ```
 
