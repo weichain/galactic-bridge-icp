@@ -33,6 +33,7 @@ dfx deploy minter --upgrade-unchanged --mode reinstall --argument "
     Init = record {
       solana_network = variant { Testnet };
       solana_contract_address = \"HS6NTv6GBVSLct8dsimRWRvjczJTAgfgDJt8VpR8wtGm\";
+      solana_initial_transaction = \"2qaGQLHQvfnjNonadNk3FQ17tSJQ7rCqSXUckaa7qhJQWGmHYptxW7V98YxFK1sE8NWz8G3nU5b3BzWbJur3ZhU4\";
       ecdsa_key_name = \"dfx_test_key\";
       ledger_id = principal \"$(dfx canister id ledger)\";
       minimum_withdrawal_amount = 100;

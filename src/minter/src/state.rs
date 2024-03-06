@@ -19,8 +19,7 @@ pub enum InvalidStateError {
     InvalidLedgerId(String),
     InvalidSolanaContractAddress(String),
     InvalidMinimumWithdrawalAmount(String),
-    // TODO: implement errors
-    // InvalidLastScrapedTransaction(String),
+    InvalidInitialTransaction(String),
 }
 
 #[derive(Debug, Hash, Copy, Clone, PartialEq, Eq, EnumIter)]
@@ -34,22 +33,23 @@ pub enum TaskType {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct State {
+    // solana config
     pub solana_network: SolanaNetwork,
     pub solana_contract_address: String,
+    pub solana_initial_transaction: String,
 
+    // icp config
     pub ecdsa_key_name: String,
     // raw format of the public key
     pub ecdsa_public_key: Option<EcdsaPublicKeyResponse>,
     pub ledger_id: Principal,
     pub minimum_withdrawal_amount: BigUint,
 
+    // internals
+    pub last_scraped_transaction: Option<String>,
+
     /// Locks preventing concurrent execution timer tasks
     pub active_tasks: HashSet<TaskType>,
-    // TODO: implement types
-    // pub first_scraped_transaction: SomeType,
-    // pub last_scraped_transaction: SomeType,
-    // pub last_observed_transaction: Option<SomeType>,
-
     // TODO: implement type
     // pub solana_transactions: SomeSolanaTransactionsType,
 
@@ -87,7 +87,12 @@ impl State {
         }
         if self.solana_contract_address.trim().is_empty() {
             return Err(InvalidStateError::InvalidSolanaContractAddress(
-                "solana_contract_address cannot be the zero address".to_string(),
+                "solana_contract_address cannot be empty".to_string(),
+            ));
+        }
+        if self.solana_initial_transaction.trim().is_empty() {
+            return Err(InvalidStateError::InvalidInitialTransaction(
+                "solana_initial_transaction cannot be empty".to_string(),
             ));
         }
         if self.minimum_withdrawal_amount == BigUint::from(0u8) {
@@ -127,6 +132,14 @@ impl State {
 
     pub const fn solana_network(&self) -> SolanaNetwork {
         self.solana_network
+    }
+
+    pub fn get_last_scraped_transaction(&self) -> String {
+        if let Some(tx) = &self.last_scraped_transaction {
+            tx.to_string()
+        } else {
+            self.solana_initial_transaction.to_string()
+        }
     }
 }
 

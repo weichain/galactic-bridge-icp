@@ -3,6 +3,7 @@ type InitArg = record {
   solana_network : SolanaNetwork;
   ledger_id : principal;
   solana_contract_address : text;
+  solana_initial_transaction : text;
   minimum_withdrawal_amount : nat;
 };
 type MinterArg = variant { Upgrade : UpgradeArg; Init : InitArg };

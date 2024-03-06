@@ -11,10 +11,12 @@ pub struct InitArg {
     #[n(1)]
     pub solana_contract_address: String,
     #[n(2)]
+    pub solana_initial_transaction: String,
+    #[n(3)]
     pub ecdsa_key_name: String,
-    #[cbor(n(3), with = "crate::cbor::principal")]
+    #[cbor(n(4), with = "crate::cbor::principal")]
     pub ledger_id: Principal,
-    #[cbor(n(4), with = "crate::cbor::nat")]
+    #[cbor(n(5), with = "crate::cbor::nat")]
     pub minimum_withdrawal_amount: Nat,
 }
 
@@ -24,6 +26,7 @@ impl TryFrom<InitArg> for State {
         InitArg {
             solana_network,
             solana_contract_address,
+            solana_initial_transaction,
             ecdsa_key_name,
             ledger_id,
             minimum_withdrawal_amount,
@@ -40,12 +43,17 @@ impl TryFrom<InitArg> for State {
         let state = Self {
             solana_network,
             solana_contract_address,
+            solana_initial_transaction,
             ecdsa_key_name,
             ecdsa_public_key: None,
             ledger_id,
             minimum_withdrawal_amount,
+
+            last_scraped_transaction: None,
+
             active_tasks: Default::default(),
         };
+
         state.validate_config()?;
         Ok(state)
     }
