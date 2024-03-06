@@ -124,6 +124,10 @@ impl State {
 
         hex::encode(uncompressed_pubkey)
     }
+
+    pub const fn solana_network(&self) -> SolanaNetwork {
+        self.solana_network
+    }
 }
 
 pub fn read_state<R>(f: impl FnOnce(&State) -> R) -> R {

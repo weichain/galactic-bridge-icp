@@ -1,5 +1,5 @@
 use minter::constants::DERIVATION_PATH;
-use minter::deposit::scrap_eth_logs;
+use minter::deposit::scrap_sol;
 use minter::lifecycle::MinterArg;
 use minter::logs::INFO;
 use minter::state::{lazy_call_ecdsa_public_key, read_state, State, STATE};
@@ -28,7 +28,7 @@ fn setup_timers() {
     });
 
     // Start scraping logs immediately after the install, then repeat with the interval.
-    ic_cdk_timers::set_timer(Duration::from_secs(0), || ic_cdk::spawn(scrap_eth_logs()));
+    ic_cdk_timers::set_timer(Duration::from_secs(0), || ic_cdk::spawn(scrap_sol()));
 }
 
 #[candid_method(init)]

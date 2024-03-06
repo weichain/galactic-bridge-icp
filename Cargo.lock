@@ -486,6 +486,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "erased-serde"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "388979d208a049ffdfb22fa33b9c81942215b940910bccfe258caeb25d125cb3"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "ethbloom"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -734,7 +743,7 @@ dependencies = [
 [[package]]
 name = "ic-base-types"
 version = "0.9.0"
-source = "git+https://github.com/dfinity/ic.git#326df23607fc8280a047daba2d8462f1dfc57466"
+source = "git+https://github.com/dfinity/ic.git#df6f192849933f7aa949df8d8495af89136ddc26"
 dependencies = [
  "byte-unit",
  "bytes",
@@ -801,7 +810,7 @@ dependencies = [
 [[package]]
 name = "ic-crypto-ecdsa-secp256k1"
 version = "0.9.0"
-source = "git+https://github.com/dfinity/ic.git#326df23607fc8280a047daba2d8462f1dfc57466"
+source = "git+https://github.com/dfinity/ic.git#df6f192849933f7aa949df8d8495af89136ddc26"
 dependencies = [
  "k256 0.13.3",
  "lazy_static",
@@ -815,7 +824,7 @@ dependencies = [
 [[package]]
 name = "ic-crypto-internal-sha2"
 version = "0.9.0"
-source = "git+https://github.com/dfinity/ic.git#326df23607fc8280a047daba2d8462f1dfc57466"
+source = "git+https://github.com/dfinity/ic.git#df6f192849933f7aa949df8d8495af89136ddc26"
 dependencies = [
  "sha2 0.10.8",
 ]
@@ -823,7 +832,7 @@ dependencies = [
 [[package]]
 name = "ic-crypto-sha2"
 version = "0.9.0"
-source = "git+https://github.com/dfinity/ic.git#326df23607fc8280a047daba2d8462f1dfc57466"
+source = "git+https://github.com/dfinity/ic.git#df6f192849933f7aa949df8d8495af89136ddc26"
 dependencies = [
  "ic-crypto-internal-sha2",
 ]
@@ -831,11 +840,11 @@ dependencies = [
 [[package]]
 name = "ic-protobuf"
 version = "0.9.0"
-source = "git+https://github.com/dfinity/ic.git#326df23607fc8280a047daba2d8462f1dfc57466"
+source = "git+https://github.com/dfinity/ic.git#df6f192849933f7aa949df8d8495af89136ddc26"
 dependencies = [
  "bincode",
  "candid",
- "erased-serde",
+ "erased-serde 0.3.31",
  "maplit",
  "prost",
  "serde",
@@ -874,7 +883,7 @@ dependencies = [
 [[package]]
 name = "icrc-ledger-client"
 version = "0.1.2"
-source = "git+https://github.com/dfinity/ic.git#326df23607fc8280a047daba2d8462f1dfc57466"
+source = "git+https://github.com/dfinity/ic.git#df6f192849933f7aa949df8d8495af89136ddc26"
 dependencies = [
  "async-trait",
  "candid",
@@ -885,7 +894,7 @@ dependencies = [
 [[package]]
 name = "icrc-ledger-client-cdk"
 version = "0.1.2"
-source = "git+https://github.com/dfinity/ic.git#326df23607fc8280a047daba2d8462f1dfc57466"
+source = "git+https://github.com/dfinity/ic.git#df6f192849933f7aa949df8d8495af89136ddc26"
 dependencies = [
  "async-trait",
  "candid",
@@ -896,7 +905,7 @@ dependencies = [
 [[package]]
 name = "icrc-ledger-types"
 version = "0.1.5"
-source = "git+https://github.com/dfinity/ic.git#326df23607fc8280a047daba2d8462f1dfc57466"
+source = "git+https://github.com/dfinity/ic.git#df6f192849933f7aa949df8d8495af89136ddc26"
 dependencies = [
  "base32",
  "candid",
@@ -1112,7 +1121,9 @@ name = "minter"
 version = "0.1.0"
 dependencies = [
  "candid",
+ "erased-serde 0.4.3",
  "ethereum-types",
+ "futures",
  "getrandom",
  "hex",
  "ic-base-types",
@@ -1241,7 +1252,7 @@ dependencies = [
 [[package]]
 name = "phantom_newtype"
 version = "0.9.0"
-source = "git+https://github.com/dfinity/ic.git#326df23607fc8280a047daba2d8462f1dfc57466"
+source = "git+https://github.com/dfinity/ic.git#df6f192849933f7aa949df8d8495af89136ddc26"
 dependencies = [
  "candid",
  "serde",
@@ -1621,7 +1632,7 @@ version = "2.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8347046d4ebd943127157b94d63abb990fcf729dc4e9978927fdf4ac3c998d06"
 dependencies = [
- "erased-serde",
+ "erased-serde 0.3.31",
 ]
 
 [[package]]
