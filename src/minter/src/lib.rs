@@ -77,8 +77,8 @@ pub async fn sign() -> (String, String, String) {
     let key_name = KEY_NAME.with(|kn| kn.borrow().to_string());
 
     let coupon = Coupon {
-        address: "0xb12B5e756A894775FC32EDdf3314Bb1B1944dC34".to_string(),
-        amount: 10_000_000_000_000_000_000,
+        address: "9gVndQ5SdugdFfGzyuKmePLRJZkCreKZ2iUTEg4agR5g".to_string(),
+        amount: 10_000_000_000,
     };
 
     // Serialize the coupon
