@@ -11,19 +11,23 @@ pub const HTTP_MAX_SIZE: u64 = 2_000_000;
 
 pub const MAX_PAYLOAD_SIZE: u64 = HTTP_MAX_SIZE - HEADER_SIZE_LIMIT;
 
+// In case no memo is set signature object should be around 175 bytes long.
+pub const SIGNATURE_RESPONSE_SIZE_ESTIMATE: u64 = 250;
+
+// In case no memo is set transaction object should be around 1100 bytes long.
+pub const TRANSACTION_RESPONSE_SIZE_ESTIMATE: u64 = 1500;
+
 #[derive(Debug, Clone, Copy)]
 pub enum RpcMethod {
     GetSignaturesForAddress,
-    // OtherMethod,
-    // Add more RPC methods as needed
+    GetTransaction,
 }
 
 impl RpcMethod {
-    pub fn as_str(&self) -> &'static str {
+    pub fn as_str(&self) -> String {
         match self {
-            RpcMethod::GetSignaturesForAddress => "getSignaturesForAddress",
-            // RpcMethod::OtherMethod => "otherMethod",
-            // Add more method names mapping as needed
+            RpcMethod::GetSignaturesForAddress => "getSignaturesForAddress".to_string(),
+            RpcMethod::GetTransaction => "getTransaction".to_string(),
         }
     }
 }
@@ -36,11 +40,11 @@ pub enum ConfirmationStatus {
 }
 
 impl ConfirmationStatus {
-    pub fn as_str(&self) -> &'static str {
+    pub fn as_str(&self) -> String {
         match self {
-            ConfirmationStatus::Finalized => "finalized",
-            ConfirmationStatus::Confirmed => "confirmed",
-            ConfirmationStatus::Processed => "processed",
+            ConfirmationStatus::Finalized => "finalized".to_string(),
+            ConfirmationStatus::Confirmed => "confirmed".to_string(),
+            ConfirmationStatus::Processed => "processed".to_string(),
         }
     }
 }

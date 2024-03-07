@@ -1,13 +1,19 @@
 use crate::lifecycle::SolanaNetwork;
 use crate::sol_rpc_client::providers::{RpcNodeProvider, MAINNET_PROVIDERS, TESTNET_PROVIDERS};
-use crate::sol_rpc_client::requests::{GetSignaturesForAddressRequest, JsonRpcRequest};
-use crate::sol_rpc_client::responses::{JsonRpcResponse, SignatureResponse};
-use crate::sol_rpc_client::types::{ConfirmationStatus, RpcMethod, HEADER_SIZE_LIMIT};
+use crate::sol_rpc_client::requests::GetSignaturesForAddressRequest;
+use crate::sol_rpc_client::responses::{
+    GetTransactionResponse, JsonRpcSignatureResponse, JsonRpcTransactionResponse, SignatureResponse,
+};
+use crate::sol_rpc_client::types::{
+    ConfirmationStatus, RpcMethod, HEADER_SIZE_LIMIT, SIGNATURE_RESPONSE_SIZE_ESTIMATE,
+    TRANSACTION_RESPONSE_SIZE_ESTIMATE,
+};
 use crate::state::{read_state, State};
 
 use ic_cdk::api::management_canister::http_request::{
     http_request, CanisterHttpRequestArgument, HttpHeader, HttpMethod,
 };
+use serde_json::json;
 use std::fmt::Debug;
 
 mod providers;
@@ -18,6 +24,11 @@ pub mod types;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SolRpcClient {
     chain: SolanaNetwork,
+}
+
+#[derive(Debug)]
+pub enum SolRcpError {
+    RpcRequestFail(String),
 }
 
 impl SolRpcClient {
@@ -36,42 +47,11 @@ impl SolRpcClient {
         }
     }
 
-    pub async fn get_signatures_for_address(
+    async fn rpc_call(
         &self,
-        limit: u64,
-        before: Option<String>,
-        until: String,
-    ) -> Option<Vec<SignatureResponse>> {
-        // In case no memo is set signature object should be around 175 bytes long.
-        const SIGNATURE_RESPONSE_SIZE_ESTIMATE: u64 = 200;
-
-        let url = self.providers()[0].url();
-
-        let params: [&dyn erased_serde::Serialize; 2] = [
-            &read_state(|s| s.solana_contract_address.clone()),
-            &GetSignaturesForAddressRequest {
-                limit: Some(limit),
-                commitment: Some(ConfirmationStatus::Finalized.as_str().to_string()),
-                before,
-                until: Some(until),
-            },
-        ];
-
-        let rpc_request = JsonRpcRequest {
-            jsonrpc: "2.0".to_string(),
-            id: 1,
-            method: RpcMethod::GetSignaturesForAddress.as_str().to_string(),
-            params,
-        };
-
-        let payload = serde_json::to_string(&rpc_request).unwrap();
-
-        ic_cdk::api::print(format!("{:?}", payload));
-
-        // The effective size estimate is the size of the response we expect to get from the RPC
-        let effective_size_estimate: u64 =
-            limit * SIGNATURE_RESPONSE_SIZE_ESTIMATE + HEADER_SIZE_LIMIT;
-
+        payload: String,
+        effective_size_estimate: u64,
+    ) -> Result<String, SolRcpError> {
         // Details of the values used in the following lines can be found here:
         // https://internetcomputer.org/docs/current/developer-docs/production/computation-and-storage-costs
         let base_cycles = 400_000_000u128 + 100_000u128 * (2 * effective_size_estimate as u128);
@@ -80,10 +60,8 @@ impl SolRpcClient {
         const SUBNET_SIZE: u128 = 34;
         let cycles = base_cycles * SUBNET_SIZE / BASE_SUBNET_SIZE;
 
-        ic_cdk::api::print(format!("{:?} {:?}", effective_size_estimate, cycles));
-
         let request = CanisterHttpRequestArgument {
-            url: url.to_string(),
+            url: self.providers()[0].url().to_string(),
             max_response_bytes: Some(effective_size_estimate),
             method: HttpMethod::POST,
             headers: vec![HttpHeader {
@@ -99,16 +77,93 @@ impl SolRpcClient {
                 let str_body = String::from_utf8(response.body)
                     .expect("Transformed response is not UTF-8 encoded.");
 
-                let response: JsonRpcResponse<SignatureResponse> =
-                    serde_json::from_str(&str_body).expect("Failed to parse response");
+                Ok(str_body)
+            }
+            Err((r, m)) => Err(SolRcpError::RpcRequestFail(format!(
+                "The http_request resulted into error. RejectionCode: {r:?}, Error: {m}"
+            ))),
+        }
+    }
+
+    pub async fn get_signatures_for_address(
+        &self,
+        limit: u64,
+        before: Option<String>,
+        until: String,
+    ) -> Option<Vec<SignatureResponse>> {
+        let params: [&dyn erased_serde::Serialize; 2] = [
+            &read_state(|s| s.solana_contract_address.clone()),
+            &GetSignaturesForAddressRequest {
+                limit: Some(limit),
+                commitment: Some(ConfirmationStatus::Finalized.as_str()),
+                before,
+                until: Some(until),
+            },
+        ];
+
+        let rpc_request = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": RpcMethod::GetSignaturesForAddress.as_str(),
+            "params": params
+        });
+
+        let payload = serde_json::to_string(&rpc_request).unwrap();
+
+        // The effective size estimate is the size of the response we expect to get from the RPC
+        let effective_size_estimate: u64 =
+            limit * SIGNATURE_RESPONSE_SIZE_ESTIMATE + HEADER_SIZE_LIMIT;
+
+        match self.rpc_call(payload, effective_size_estimate).await {
+            Ok(response) => {
+                let response: JsonRpcSignatureResponse<SignatureResponse> =
+                    serde_json::from_str(&response).expect("Failed to parse response");
 
                 Some(response.result)
             }
-            Err((r, m)) => {
-                let message = format!(
-                    "The http_request resulted into error. RejectionCode: {r:?}, Error: {m}"
-                );
-                ic_cdk::api::print(format!("{:?}", message));
+            Err(error) => {
+                ic_cdk::api::print(format!("{:?}", error));
+
+                None
+            }
+        }
+    }
+
+    pub async fn get_transactions(
+        &self,
+        signatures: Vec<String>,
+    ) -> Option<Vec<GetTransactionResponse>> {
+        let mut rpc_request = Vec::new();
+        let mut id = 1;
+
+        for signature in &signatures {
+            let transaction = json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "method": RpcMethod::GetTransaction.as_str().to_string(),
+                "params": [signature]
+            });
+            rpc_request.push(transaction);
+            id += 1;
+        }
+
+        let payload = serde_json::to_string(&rpc_request).unwrap();
+
+        // The effective size estimate is the size of the response we expect to get from the RPC
+        let effective_size_estimate: u64 =
+            (signatures.len() as u64) * TRANSACTION_RESPONSE_SIZE_ESTIMATE + HEADER_SIZE_LIMIT;
+
+        match self.rpc_call(payload, effective_size_estimate).await {
+            Ok(response) => {
+                let response: Vec<JsonRpcTransactionResponse<GetTransactionResponse>> =
+                    serde_json::from_str(&response).expect("Failed to parse response");
+
+                let result = response.into_iter().map(|r| r.result).collect();
+
+                Some(result)
+            }
+            Err(error) => {
+                ic_cdk::api::print(format!("{:?}", error));
 
                 None
             }
