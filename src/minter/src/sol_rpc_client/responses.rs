@@ -27,65 +27,65 @@ pub struct JsonRpcTransactionResponse<T> {
 }
 
 #[derive(Debug, Deserialize)]
-struct Header {
-    numReadonlySignedAccounts: u64,
-    numReadonlyUnsignedAccounts: u64,
-    numRequiredSignatures: u64,
+pub struct Header {
+    pub numReadonlySignedAccounts: u64,
+    pub numReadonlyUnsignedAccounts: u64,
+    pub numRequiredSignatures: u64,
 }
 
 #[derive(Debug, Deserialize)]
-struct Instruction {
-    accounts: Vec<u64>,
-    data: String,
-    programIdIndex: u64,
-    stackHeight: Option<u64>,
+pub struct Instruction {
+    pub accounts: Vec<u64>,
+    pub data: String,
+    pub programIdIndex: u64,
+    pub stackHeight: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
-struct Message {
-    accountKeys: Vec<String>,
-    header: Header,
-    instructions: Vec<Instruction>,
-    recentBlockhash: String,
+pub struct Message {
+    pub accountKeys: Vec<String>,
+    pub header: Header,
+    pub instructions: Vec<Instruction>,
+    pub recentBlockhash: String,
 }
 
 #[derive(Debug, Deserialize)]
-struct Meta {
-    computeUnitsConsumed: u64,
-    err: Option<serde_json::Value>,
-    fee: u64,
-    innerInstructions: Vec<serde_json::Value>,
-    loadedAddresses: LoadedAddresses,
-    logMessages: Vec<String>,
-    postBalances: Vec<u64>,
-    postTokenBalances: Vec<serde_json::Value>,
-    preBalances: Vec<u64>,
-    preTokenBalances: Vec<serde_json::Value>,
-    rewards: Vec<serde_json::Value>,
-    status: Status,
+pub struct Meta {
+    pub computeUnitsConsumed: u64,
+    pub err: Option<serde_json::Value>,
+    pub fee: u64,
+    pub innerInstructions: Vec<serde_json::Value>,
+    pub loadedAddresses: LoadedAddresses,
+    pub logMessages: Vec<String>,
+    pub postBalances: Vec<u64>,
+    pub postTokenBalances: Vec<serde_json::Value>,
+    pub preBalances: Vec<u64>,
+    pub preTokenBalances: Vec<serde_json::Value>,
+    pub rewards: Vec<serde_json::Value>,
+    pub status: Status,
 }
 
 #[derive(Debug, Deserialize)]
-struct Status {
-    Ok: Option<serde_json::Value>,
+pub struct Status {
+    pub Ok: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]
-struct LoadedAddresses {
-    readonly: Vec<serde_json::Value>,
-    writable: Vec<serde_json::Value>,
+pub struct LoadedAddresses {
+    pub readonly: Vec<serde_json::Value>,
+    pub writable: Vec<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]
-struct Transaction {
-    message: Message,
-    signatures: Vec<String>,
+pub struct Transaction {
+    pub message: Message,
+    pub signatures: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct GetTransactionResponse {
-    blockTime: u64,
-    meta: Meta,
-    slot: u64,
-    transaction: Transaction,
+    pub blockTime: u64,
+    pub meta: Meta,
+    pub slot: u64,
+    pub transaction: Transaction,
 }

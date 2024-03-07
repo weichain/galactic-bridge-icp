@@ -91,6 +91,13 @@ impl SolRpcClient {
         before: Option<String>,
         until: String,
     ) -> Option<Vec<SignatureResponse>> {
+        ic_cdk::println!(
+            "Getting signatures for address: limit: {}, before: {:?}, until: {}",
+            limit,
+            before,
+            until
+        );
+
         let params: [&dyn erased_serde::Serialize; 2] = [
             &read_state(|s| s.solana_contract_address.clone()),
             &GetSignaturesForAddressRequest {
@@ -133,6 +140,8 @@ impl SolRpcClient {
         &self,
         signatures: Vec<String>,
     ) -> Option<Vec<GetTransactionResponse>> {
+        ic_cdk::println!("Getting transactions: {:?}", signatures);
+
         let mut rpc_request = Vec::new();
         let mut id = 1;
 
