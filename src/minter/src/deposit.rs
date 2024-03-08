@@ -6,6 +6,33 @@ use crate::state::{mutate_state, read_state, TaskType};
 
 use ic_canister_log::log;
 
+#[derive(Debug)]
+pub struct DepositEvent {
+    pub address_icp: String,
+    pub amount: u64,
+}
+
+impl DepositEvent {
+    fn from_string(s: &str) -> Self {
+        use base64::prelude::*;
+        let bytes = BASE64_STANDARD.decode(s).unwrap();
+
+        let amount_bytes = &bytes[bytes.len() - 8..];
+        let mut amount: u64 = 0;
+        for i in 0..8 {
+            amount |= (amount_bytes[i] as u64) << (i * 8);
+        }
+
+        let address_bytes = &bytes[12..bytes.len() - 8];
+        let address_icp = String::from_utf8_lossy(&address_bytes);
+
+        DepositEvent {
+            address_icp: address_icp.to_string(),
+            amount,
+        }
+    }
+}
+
 pub async fn scrap_solana_contract() {
     let _guard = match TimerGuard::new(TaskType::ScrapSolLogs) {
         Ok(guard) => guard,
@@ -66,33 +93,6 @@ pub async fn scrap_solana_contract() {
         };
     }
 
-    use serde::{Deserialize, Serialize};
-    #[derive(Debug, Deserialize, Serialize)]
-    pub struct DepositEvent {
-        pub address_icp: String,
-        pub amount: u64,
-    }
-    impl From<&str> for DepositEvent {
-        fn from(data: &str) -> Self {
-            // Assuming data is a base64 encoded string
-            let decoded_data = base64::decode(data).expect("Failed to decode base64 data");
-
-            // Assuming the decoded data is in a specific format, e.g., address_icp and amount separated by some delimiter
-            let decoded_string =
-                String::from_utf8(decoded_data).expect("Failed to convert decoded data to string");
-            let parts: Vec<&str> = decoded_string.split(',').collect();
-
-            // Assuming the first part is the address_icp and the second part is the amount
-            let address_icp = parts.get(0).unwrap_or(&"").to_string();
-            let amount = parts.get(1).unwrap_or(&"0").parse().unwrap_or(0);
-
-            DepositEvent {
-                address_icp,
-                amount,
-            }
-        }
-    }
-
     transactions_result.iter().for_each(|transaction| {
         // get log messages
         let msgs = &transaction.meta.logMessages;
@@ -107,14 +107,13 @@ pub async fn scrap_solana_contract() {
             if let Some(data) = msgs.iter().find(|&instr| instr.contains("Program data: ")) {
                 // get program data and parse it
                 if let Some(index) = data.find("Program data: ") {
-                    let base64_data = &data[index + "Program data: ".len()..];
-                    ic_cdk::println!("Base64 Data: {}", base64_data);
+                    let base64_data = &data[index + "Program data: ".len()..].trim();
 
-                    let de = DepositEvent::from(base64_data);
-                    ic_cdk::println!("deposit event: {:?}", de);
+                    let deposit_event = DepositEvent::from_string(base64_data);
+                    ic_cdk::println!("Deposit instruction found: {:?}", deposit_event);
                 }
             } else {
-                ("Deposit instruction found. No program data found");
+                ic_cdk::println!("Deposit instruction found. No program data found");
             }
         } else {
             ic_cdk::println!("Non Deposit instruction. Skipping...");

@@ -206,9 +206,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.0.89"
+version = "1.0.90"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0ba8f7aaa012f30d5b2861462f6708eccd49c3c39863fe083a308035f63d723"
+checksum = "8cd6604a82acf3039f1144f54b8eb34e91ffba622051189e71b781822d5ee1f5"
 
 [[package]]
 name = "cfg-if"
@@ -749,7 +749,7 @@ dependencies = [
 [[package]]
 name = "ic-base-types"
 version = "0.9.0"
-source = "git+https://github.com/dfinity/ic.git#df6f192849933f7aa949df8d8495af89136ddc26"
+source = "git+https://github.com/dfinity/ic.git#f58b13bc425784cd399070028ff8b3f3dca8c869"
 dependencies = [
  "byte-unit",
  "bytes",
@@ -816,7 +816,7 @@ dependencies = [
 [[package]]
 name = "ic-crypto-ecdsa-secp256k1"
 version = "0.9.0"
-source = "git+https://github.com/dfinity/ic.git#df6f192849933f7aa949df8d8495af89136ddc26"
+source = "git+https://github.com/dfinity/ic.git#f58b13bc425784cd399070028ff8b3f3dca8c869"
 dependencies = [
  "k256 0.13.3",
  "lazy_static",
@@ -830,7 +830,7 @@ dependencies = [
 [[package]]
 name = "ic-crypto-internal-sha2"
 version = "0.9.0"
-source = "git+https://github.com/dfinity/ic.git#df6f192849933f7aa949df8d8495af89136ddc26"
+source = "git+https://github.com/dfinity/ic.git#f58b13bc425784cd399070028ff8b3f3dca8c869"
 dependencies = [
  "sha2 0.10.8",
 ]
@@ -838,7 +838,7 @@ dependencies = [
 [[package]]
 name = "ic-crypto-sha2"
 version = "0.9.0"
-source = "git+https://github.com/dfinity/ic.git#df6f192849933f7aa949df8d8495af89136ddc26"
+source = "git+https://github.com/dfinity/ic.git#f58b13bc425784cd399070028ff8b3f3dca8c869"
 dependencies = [
  "ic-crypto-internal-sha2",
 ]
@@ -846,7 +846,7 @@ dependencies = [
 [[package]]
 name = "ic-protobuf"
 version = "0.9.0"
-source = "git+https://github.com/dfinity/ic.git#df6f192849933f7aa949df8d8495af89136ddc26"
+source = "git+https://github.com/dfinity/ic.git#f58b13bc425784cd399070028ff8b3f3dca8c869"
 dependencies = [
  "bincode",
  "candid",
@@ -889,7 +889,7 @@ dependencies = [
 [[package]]
 name = "icrc-ledger-client"
 version = "0.1.2"
-source = "git+https://github.com/dfinity/ic.git#df6f192849933f7aa949df8d8495af89136ddc26"
+source = "git+https://github.com/dfinity/ic.git#f58b13bc425784cd399070028ff8b3f3dca8c869"
 dependencies = [
  "async-trait",
  "candid",
@@ -900,7 +900,7 @@ dependencies = [
 [[package]]
 name = "icrc-ledger-client-cdk"
 version = "0.1.2"
-source = "git+https://github.com/dfinity/ic.git#df6f192849933f7aa949df8d8495af89136ddc26"
+source = "git+https://github.com/dfinity/ic.git#f58b13bc425784cd399070028ff8b3f3dca8c869"
 dependencies = [
  "async-trait",
  "candid",
@@ -911,7 +911,7 @@ dependencies = [
 [[package]]
 name = "icrc-ledger-types"
 version = "0.1.5"
-source = "git+https://github.com/dfinity/ic.git#df6f192849933f7aa949df8d8495af89136ddc26"
+source = "git+https://github.com/dfinity/ic.git#f58b13bc425784cd399070028ff8b3f3dca8c869"
 dependencies = [
  "base32",
  "candid",
@@ -1259,7 +1259,7 @@ dependencies = [
 [[package]]
 name = "phantom_newtype"
 version = "0.9.0"
-source = "git+https://github.com/dfinity/ic.git#df6f192849933f7aa949df8d8495af89136ddc26"
+source = "git+https://github.com/dfinity/ic.git#f58b13bc425784cd399070028ff8b3f3dca8c869"
 dependencies = [
  "candid",
  "serde",
