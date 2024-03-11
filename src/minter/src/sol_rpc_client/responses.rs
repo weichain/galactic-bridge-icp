@@ -22,7 +22,7 @@ pub struct SignatureResponse {
 #[derive(Debug, Deserialize)]
 pub struct JsonRpcTransactionResponse<T> {
     pub jsonrpc: String,
-    pub result: T,
+    pub result: Option<T>,
     pub id: u64,
 }
 
@@ -82,7 +82,7 @@ pub struct Transaction {
     pub signatures: Vec<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct GetTransactionResponse {
     pub blockTime: u64,
     pub meta: Meta,

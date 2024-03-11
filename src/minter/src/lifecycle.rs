@@ -52,6 +52,11 @@ impl TryFrom<InitArg> for State {
             last_scraped_transaction: None,
 
             active_tasks: Default::default(),
+
+            skipped_signature_ranges: Default::default(),
+            skipped_transactions: Default::default(),
+            invalid_transactions: Default::default(),
+            events_to_mint: Default::default(),
         };
 
         state.validate_config()?;

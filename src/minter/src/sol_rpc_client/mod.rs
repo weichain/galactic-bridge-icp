@@ -14,6 +14,7 @@ use ic_cdk::api::management_canister::http_request::{
     http_request, CanisterHttpRequestArgument, HttpHeader, HttpMethod,
 };
 use serde_json::json;
+use std::collections::HashMap;
 
 mod providers;
 pub mod requests;
@@ -146,7 +147,7 @@ impl SolRpcClient {
     pub async fn get_transactions(
         &self,
         signatures: Vec<String>,
-    ) -> Result<Vec<GetTransactionResponse>, SolRcpError> {
+    ) -> Result<HashMap<String, Option<GetTransactionResponse>>, SolRcpError> {
         let mut rpc_request = Vec::new();
         let mut id = 1;
 
@@ -179,7 +180,18 @@ impl SolRpcClient {
                 match serde_json::from_str::<Vec<JsonRpcTransactionResponse<GetTransactionResponse>>>(
                     &response,
                 ) {
-                    Ok(payload) => Ok(payload.into_iter().map(|r| r.result).collect()),
+                    Ok(payload) => {
+                        let mut map = HashMap::<String, Option<GetTransactionResponse>>::new();
+
+                        payload
+                            .into_iter()
+                            .enumerate()
+                            .for_each(|(index, transaction)| {
+                                map.insert(signatures[index].clone(), transaction.result);
+                            });
+
+                        Ok(map)
+                    }
                     Err(error) => Err(SolRcpError::new_rpc_request_fail(&format!(
                         "FromStringOfJsonError: {error}"
                     ))),

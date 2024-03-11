@@ -1,4 +1,5 @@
 use crate::constants::DERIVATION_PATH;
+use crate::events::{DepositEvent, InvalidTransaction, SkippedSignatureRange, SkippedTransaction};
 use crate::lifecycle::SolanaNetwork;
 use crate::logs::DEBUG;
 
@@ -6,7 +7,10 @@ use candid::Principal;
 use ic_canister_log::log;
 use ic_cdk::api::management_canister::ecdsa::EcdsaPublicKeyResponse;
 use num_bigint::BigUint;
-use std::{cell::RefCell, collections::HashSet};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+};
 use strum_macros::EnumIter;
 
 thread_local! {
@@ -50,14 +54,11 @@ pub struct State {
 
     /// Locks preventing concurrent execution timer tasks
     pub active_tasks: HashSet<TaskType>,
-    // TODO: implement type
-    // pub solana_transactions: SomeSolanaTransactionsType,
 
-    // TODO: implement types
-    // pub events_to_mint: BTreeMap<EventSource, ReceivedEthEvent>,
-    // pub minted_events: BTreeMap<EventSource, MintedEvent>,
-    // pub invalid_events: BTreeMap<EventSource, String>,
-
+    pub skipped_signature_ranges: HashMap<String, SkippedSignatureRange>,
+    pub skipped_transactions: HashMap<String, SkippedTransaction>,
+    pub invalid_transactions: HashMap<String, InvalidTransaction>,
+    pub events_to_mint: HashMap<String, DepositEvent>,
     // TODO: no clue if I need this
     // /// Current balance of ETH held by minter.
     // /// Computed based on audit events.
@@ -140,6 +141,36 @@ impl State {
         } else {
             self.solana_initial_transaction.to_string()
         }
+    }
+
+    pub fn record_skipped_signature_ranges(&mut self, range: SkippedSignatureRange) {
+        _ = self
+            .skipped_signature_ranges
+            .insert(format!("{}-{}", range.before, range.until), range);
+    }
+
+    pub fn remove_skipped_signature_ranges(&mut self, range: SkippedSignatureRange) {
+        _ = self
+            .skipped_signature_ranges
+            .remove(&format!("{}-{}", range.before, range.until));
+    }
+
+    pub fn record_skipped_transaction(&mut self, tx: SkippedTransaction) {
+        _ = self
+            .skipped_transactions
+            .insert(format!("{}", tx.signature), tx);
+    }
+
+    pub fn remove_skipped_transaction(&mut self, tx: SkippedTransaction) {
+        _ = self
+            .skipped_transactions
+            .remove(&format!("{}", tx.signature));
+    }
+
+    pub fn record_invalid_transaction(&mut self, tx: InvalidTransaction) {
+        _ = self
+            .invalid_transactions
+            .insert(format!("{}", tx.signature), tx);
     }
 }
 
