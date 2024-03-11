@@ -9,7 +9,6 @@ use minter::types::{
 };
 
 use candid::{candid_method, Nat, Principal};
-use ic_canister_log::log;
 use ic_cdk::{api::call::call_with_payment, call};
 use ic_cdk_macros::{init, query, update};
 use icrc_ledger_client_cdk::{CdkRuntime, ICRC1Client};
@@ -40,7 +39,7 @@ pub fn init(args: MinterArg) {
         MinterArg::Init(init_arg) => {
             ic_cdk::println!("init_arg: {:?}", init_arg);
 
-            log!(INFO, "[init]: initialized minter with arg: {:?}", init_arg);
+            ic_canister_log::log!(INFO, "[init]: initialized minter with arg: {:?}", init_arg);
             STATE.with(|cell| {
                 // TODO: record the event, how events work?
                 // storage::record_event(EventType::Init(init_arg.clone()));

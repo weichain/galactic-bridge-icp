@@ -14,13 +14,13 @@ use ic_cdk::api::management_canister::http_request::{
     http_request, CanisterHttpRequestArgument, HttpHeader, HttpMethod,
 };
 use serde_json::json;
-use std::fmt::Debug;
 
 mod providers;
 pub mod requests;
 pub mod responses;
 pub mod types;
 
+// TODO: support for multiple providers
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SolRpcClient {
     chain: SolanaNetwork,
@@ -29,6 +29,12 @@ pub struct SolRpcClient {
 #[derive(Debug)]
 pub enum SolRcpError {
     RpcRequestFail(String),
+}
+
+impl SolRcpError {
+    pub fn new_rpc_request_fail(msg: &str) -> Self {
+        SolRcpError::RpcRequestFail(format!("The http_request resulted into error. {}", msg))
+    }
 }
 
 impl SolRpcClient {
@@ -74,13 +80,17 @@ impl SolRpcClient {
 
         match http_request(request, cycles).await {
             Ok((response,)) => {
-                let str_body = String::from_utf8(response.body)
-                    .expect("Transformed response is not UTF-8 encoded.");
+                let str_body = String::from_utf8(response.body);
 
-                Ok(str_body)
+                match str_body {
+                    Ok(str_body) => Ok(str_body),
+                    Err(error) => Err(SolRcpError::new_rpc_request_fail(&format!(
+                        "FromUtf8Error: {error}"
+                    ))),
+                }
             }
-            Err((r, m)) => Err(SolRcpError::RpcRequestFail(format!(
-                "The http_request resulted into error. RejectionCode: {r:?}, Error: {m}"
+            Err((r, m)) => Err(SolRcpError::new_rpc_request_fail(&format!(
+                "RejectionCode: {r:?}, Error: {m}"
             ))),
         }
     }
@@ -90,14 +100,7 @@ impl SolRpcClient {
         limit: u64,
         before: Option<String>,
         until: String,
-    ) -> Option<Vec<SignatureResponse>> {
-        ic_cdk::println!(
-            "Getting signatures for address: limit: {}, before: {:?}, until: {}",
-            limit,
-            before,
-            until
-        );
-
+    ) -> Result<Vec<SignatureResponse>, SolRcpError> {
         let params: [&dyn erased_serde::Serialize; 2] = [
             &read_state(|s| s.solana_contract_address.clone()),
             &GetSignaturesForAddressRequest {
@@ -108,14 +111,19 @@ impl SolRpcClient {
             },
         ];
 
-        let rpc_request = json!({
+        let payload = serde_json::to_string(&json!({
             "jsonrpc": "2.0",
             "id": 1,
             "method": RpcMethod::GetSignaturesForAddress.as_str(),
             "params": params
-        });
-
-        let payload = serde_json::to_string(&rpc_request).unwrap();
+        }));
+        let payload = if let Err(error) = payload {
+            return Err(SolRcpError::new_rpc_request_fail(&format!(
+                "ToStringOfJsonError: {error}"
+            )));
+        } else {
+            payload.unwrap()
+        };
 
         // The effective size estimate is the size of the response we expect to get from the RPC
         let effective_size_estimate: u64 =
@@ -123,25 +131,22 @@ impl SolRpcClient {
 
         match self.rpc_call(payload, effective_size_estimate).await {
             Ok(response) => {
-                let response: JsonRpcSignatureResponse<SignatureResponse> =
-                    serde_json::from_str(&response).expect("Failed to parse response");
-
-                Some(response.result)
+                match serde_json::from_str::<JsonRpcSignatureResponse<SignatureResponse>>(&response)
+                {
+                    Ok(payload) => Ok(payload.result),
+                    Err(error) => Err(SolRcpError::new_rpc_request_fail(&format!(
+                        "FromStringOfJsonError: {error}"
+                    ))),
+                }
             }
-            Err(error) => {
-                ic_cdk::api::print(format!("{:?}", error));
-
-                None
-            }
+            Err(error) => return Err(error),
         }
     }
 
     pub async fn get_transactions(
         &self,
         signatures: Vec<String>,
-    ) -> Option<Vec<GetTransactionResponse>> {
-        ic_cdk::println!("Getting transactions: {:?}", signatures);
-
+    ) -> Result<Vec<GetTransactionResponse>, SolRcpError> {
         let mut rpc_request = Vec::new();
         let mut id = 1;
 
@@ -156,7 +161,14 @@ impl SolRpcClient {
             id += 1;
         }
 
-        let payload = serde_json::to_string(&rpc_request).unwrap();
+        let payload = serde_json::to_string(&rpc_request);
+        let payload = if let Err(error) = payload {
+            return Err(SolRcpError::new_rpc_request_fail(&format!(
+                "ToStringOfJsonError: {error}"
+            )));
+        } else {
+            payload.unwrap()
+        };
 
         // The effective size estimate is the size of the response we expect to get from the RPC
         let effective_size_estimate: u64 =
@@ -164,18 +176,16 @@ impl SolRpcClient {
 
         match self.rpc_call(payload, effective_size_estimate).await {
             Ok(response) => {
-                let response: Vec<JsonRpcTransactionResponse<GetTransactionResponse>> =
-                    serde_json::from_str(&response).expect("Failed to parse response");
-
-                let result = response.into_iter().map(|r| r.result).collect();
-
-                Some(result)
+                match serde_json::from_str::<Vec<JsonRpcTransactionResponse<GetTransactionResponse>>>(
+                    &response,
+                ) {
+                    Ok(payload) => Ok(payload.into_iter().map(|r| r.result).collect()),
+                    Err(error) => Err(SolRcpError::new_rpc_request_fail(&format!(
+                        "FromStringOfJsonError: {error}"
+                    ))),
+                }
             }
-            Err(error) => {
-                ic_cdk::api::print(format!("{:?}", error));
-
-                None
-            }
+            Err(error) => return Err(error),
         }
     }
 }

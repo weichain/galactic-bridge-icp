@@ -4,16 +4,14 @@ use crate::sol_rpc_client::responses::{GetTransactionResponse, SignatureResponse
 use crate::sol_rpc_client::SolRpcClient;
 use crate::state::{mutate_state, read_state, TaskType};
 
-use ic_canister_log::log;
-
 #[derive(Debug)]
 pub struct DepositEvent {
     pub address_icp: String,
     pub amount: u64,
 }
 
-impl DepositEvent {
-    fn from_string(s: &str) -> Self {
+impl From<&str> for DepositEvent {
+    fn from(s: &str) -> Self {
         use base64::prelude::*;
         let bytes = BASE64_STANDARD.decode(s).unwrap();
 
@@ -47,23 +45,38 @@ pub async fn scrap_solana_contract() {
     let until = read_state(|s| s.get_last_scraped_transaction());
 
     loop {
+        ic_canister_log::log!(
+            DEBUG,
+            "Getting signatures for address: limit: {}, before: {:?}, until: {}",
+            LIMIT,
+            before,
+            until
+        );
+
         let chunk = rpc_client
             .get_signatures_for_address(LIMIT, before.clone(), until.clone())
             .await;
 
         match chunk {
-            None => {
-                log!(DEBUG, "Failed to get signatures for address");
-                return;
-            }
-            Some(signatures) => {
+            Ok(signatures) => {
                 if signatures.is_empty() {
+                    ic_canister_log::log!(
+                        DEBUG,
+                        "No signatures for address available: limit: {}, before: {:?}, until: {}",
+                        LIMIT,
+                        before,
+                        until
+                    );
                     break;
                 }
 
                 let last_signature = signatures.last().unwrap();
                 before = Some(last_signature.signature.clone());
                 signatures_result.extend(signatures);
+            }
+            Err(error) => {
+                ic_canister_log::log!(DEBUG, "Failed to get signatures for address: {:?}", error);
+                return;
             }
         };
     }
@@ -80,43 +93,47 @@ pub async fn scrap_solana_contract() {
     let mut transactions_result: Vec<GetTransactionResponse> = Vec::new();
 
     for chunk in signatures.chunks(LIMIT as usize) {
+        ic_canister_log::log!(DEBUG, "Getting transactions: {:?}", chunk);
+
         let transactions_chunk = rpc_client.get_transactions(chunk.to_vec()).await;
 
         match transactions_chunk {
-            None => {
-                log!(DEBUG, "Failed to get signatures for address");
-                return;
-            }
-            Some(transactions) => {
+            Ok(transactions) => {
                 transactions_result.extend(transactions);
+            }
+            Err(error) => {
+                ic_canister_log::log!(DEBUG, "Failed to get transactions: {:?}", error);
+                return;
             }
         };
     }
 
-    transactions_result.iter().for_each(|transaction| {
-        // get log messages
+    // transform to deposit event
+    let deposit_msg: String = String::from("Program log: Instruction: Deposit");
+    let success_msg: String = format!(
+        "Program {} success",
+        &read_state(|s| s.solana_contract_address.clone())
+    );
+    let program_data_msg: String = String::from("Program data: ");
+
+    for transaction in transactions_result {
         let msgs = &transaction.meta.logMessages;
 
-        // check if one of the log messages contains "Instruction: Deposit"
-        if let Some(_) = msgs
-            .iter()
-            .find(|&instr| instr.contains("Instruction: Deposit"))
+        if msgs.contains(&deposit_msg)
+            && msgs.contains(&success_msg)
+            && msgs.iter().any(|s| s.starts_with(&program_data_msg))
         {
-            // check if one of the log messages contains "Program data: "
-            // TODO:
-            if let Some(data) = msgs.iter().find(|&instr| instr.contains("Program data: ")) {
-                // get program data and parse it
-                if let Some(index) = data.find("Program data: ") {
-                    let base64_data = &data[index + "Program data: ".len()..].trim();
+            if let Some(program_data) = msgs.iter().find(|s| s.starts_with(&program_data_msg)) {
+                // Extract the data after "Program data: "
+                let base64_data = program_data.trim_start_matches(&program_data_msg);
 
-                    let deposit_event = DepositEvent::from_string(base64_data);
-                    ic_cdk::println!("Deposit instruction found: {:?}", deposit_event);
-                }
+                let deposit_event = DepositEvent::from(base64_data);
+                ic_canister_log::log!(DEBUG, "Deposit instruction found: {:?}", deposit_event);
             } else {
-                ic_cdk::println!("Deposit instruction found. No program data found");
+                ic_canister_log::log!(DEBUG, "Deposit instruction found. No program data found");
             }
         } else {
-            ic_cdk::println!("Non Deposit instruction. Skipping...");
+            ic_canister_log::log!(DEBUG, "Non Deposit instruction. Skipping...");
         }
-    });
+    }
 }
