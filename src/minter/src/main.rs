@@ -60,6 +60,13 @@ pub async fn get_address() -> (String, String) {
     read_state(|s| (s.compressed_public_key(), s.uncompressed_public_key()))
 }
 
+// dfx canister call minter get_state
+// TODO: only for testing
+#[query]
+fn get_state() {
+    read_state(|s| ic_cdk::println!("state: {:?}", s));
+}
+
 // #[update]
 // pub async fn sign() -> (String, String, String) {
 //     let key_name = read_state(|s| s.ecdsa_key_name.clone());

@@ -3,12 +3,12 @@ use crate::guard::TimerGuard;
 use crate::logs::DEBUG;
 use crate::sol_rpc_client::responses::{GetTransactionResponse, SignatureResponse};
 use crate::sol_rpc_client::SolRpcClient;
-use crate::state::{mutate_state, read_state, TaskType};
+use crate::state::{mutate_state, read_state, State, TaskType};
 
 use std::collections::HashMap;
 
 const GET_SIGNATURES_BY_ADDRESS_LIMIT: u64 = 10;
-const GET_TRANSACTIONS_LIMIT: u64 = 10;
+const GET_TRANSACTIONS_LIMIT: u64 = 5;
 
 pub async fn scrap_solana_contract() {
     let _guard = match TimerGuard::new(TaskType::ScrapSolLogs) {
@@ -32,11 +32,42 @@ pub async fn scrap_solana_contract() {
     let (deposit_events, invalid_transactions) = parse_log_messages(transactions_result).await;
 
     // update last scraped transaction
-    mutate_state(|s| {
-        s.last_scraped_transaction = signatures_result.first().map(|r| r.signature.clone())
+    mutate_state(|s: &mut State| {
+        s.last_scraped_transaction = signatures_result.first().map(|r| r.signature.clone());
+
+        skipped_signature_range.map(|range| {
+            s.record_skipped_signature_range(range);
+        });
+
+        skipped_transactions.iter().for_each(|tx| {
+            s.record_skipped_transaction(tx.clone());
+        });
+
+        invalid_transactions.iter().for_each(|tx| {
+            s.record_invalid_transaction(tx.clone());
+        });
+
+        deposit_events.iter().for_each(|(k, v)| {
+            s.events_to_mint.insert(k.clone(), v.clone());
+        });
     });
 }
 
+// Method relies on the getSignaturesForAddress RPC call to get the signatures for the address:
+// https://solana.com/docs/rpc/http/getsignaturesforaddress
+//
+// The method is called with a limit, which is the maximum number of signatures to be returned on a single call:
+// On first call:
+// before_signature is unknown -> If not provided the search starts from the top of the highest max confirmed block
+// until_signature is the last scraped transaction
+//
+// On subsequent calls:
+// before_signature is the last signature from the previous call
+// until_signature is the last scraped transaction
+//
+// If first call fails range is not marked as skipped (it will be covered on next calls).
+// But in case subsequent call fails (it means gap appears in the data) scrap process stops and the failed
+// range is marked as skipped (for later retry)!
 async fn scrap_signatures_with_limit(
     rpc_client: &SolRpcClient,
     limit: Option<u64>,
@@ -49,10 +80,7 @@ async fn scrap_signatures_with_limit(
     loop {
         ic_canister_log::log!(
             DEBUG,
-            "Getting signatures for address: limit: {}, before: {:?}, until: {}",
-            limit,
-            before_signature,
-            until_signature
+            "Getting signatures for address: limit: {limit}, before: {before_signature:?}, until: {until_signature}.",
         );
 
         // get signatures for chunk
@@ -66,10 +94,7 @@ async fn scrap_signatures_with_limit(
                 if signatures.is_empty() {
                     ic_canister_log::log!(
                         DEBUG,
-                        "No signatures for address available: limit: {}, before: {:?}, until: {}",
-                        limit,
-                        before_signature,
-                        until_signature
+                        "No signatures for address available: limit: {limit}, before: {before_signature:?}, until: {until_signature}.",
                     );
 
                     return (signatures_result, None);
@@ -82,7 +107,7 @@ async fn scrap_signatures_with_limit(
                 signatures_result.extend(signatures);
             }
             Err(error) => {
-                ic_canister_log::log!(DEBUG, "Failed to get signatures for address: {:?}", error);
+                ic_canister_log::log!(DEBUG, "Failed to get signatures for address: {:?}.", error);
 
                 // if rpc request fails to get signatures, cannot continue, skip the range and retry later
                 if let Some(before) = before_signature {
@@ -114,30 +139,47 @@ async fn scrap_transactions_with_limit(
     let mut skipped_transactions: Vec<SkippedTransaction> = Vec::new();
 
     for chunk in signatures.chunks(limit as usize) {
-        ic_canister_log::log!(DEBUG, "Getting transactions: {:?}", chunk);
+        ic_canister_log::log!(DEBUG, "Getting transactions: {chunk:?}.");
 
         let transactions_chunk = rpc_client.get_transactions(chunk.to_vec()).await;
 
         match transactions_chunk {
             Ok(txs) => {
                 txs.iter().for_each(|(k, v)| {
-                    if let Some(tx) = v {
-                        transactions_result.push(tx.clone());
-                    }
+                    // if tx call failed
+                    if let Err(error) = v {
+                        ic_canister_log::log!(DEBUG, "Signature: {k} -> Failed with {error:?}.",);
 
-                    skipped_transactions.push(SkippedTransaction::new(
-                        k.to_string(),
-                        "Transaction not found".to_string(),
-                    ));
+                        skipped_transactions.push(SkippedTransaction::new(
+                            k.to_string(),
+                            format!("{error:?}",),
+                        ));
+                    } else {
+                        // if tx call returned a proper object
+                        if let Some(tx) = v.as_ref().unwrap() {
+                            transactions_result.push(tx.clone());
+                        } else {
+                            ic_canister_log::log!(
+                                DEBUG,
+                                "Signature: {k} -> Transaction not found.",
+                            );
+
+                            // if tx call returned NONE
+                            skipped_transactions.push(SkippedTransaction::new(
+                                k.to_string(),
+                                "Transaction not found".to_string(),
+                            ));
+                        }
+                    }
                 })
                 // save transactions
             }
             Err(error) => {
                 // if RPC call failed to get transactions, skip the transactions and retry later
-                ic_canister_log::log!(DEBUG, "Failed to get transactions: {:?}", error);
+                ic_canister_log::log!(DEBUG, "Failed to get transactions: {error:?}.");
 
                 skipped_transactions.extend(chunk.iter().map(|signature| {
-                    SkippedTransaction::new(signature.clone(), format!("{:?}", error))
+                    SkippedTransaction::new(signature.clone(), format!("{error:?}"))
                 }));
             }
         };
@@ -177,23 +219,21 @@ async fn parse_log_messages(
 
                 ic_canister_log::log!(
                     DEBUG,
-                    "Signature: {} -> Deposit transaction found: {:?}",
-                    sig,
-                    deposit_event
+                    "Signature: {sig} -> Deposit transaction found: {deposit_event:?}.",
                 );
 
                 deposits.insert(sig, deposit_event);
             } else {
                 let error_msg = "Deposit transaction found. Invalid deposit data.".to_string();
 
-                ic_canister_log::log!(DEBUG, "Signature: {} -> {}", sig, error_msg);
+                ic_canister_log::log!(DEBUG, "Signature: {sig} -> {error_msg}.");
 
                 invalid_transactions.push(InvalidTransaction::new(sig, error_msg))
             }
         } else {
             let error_msg = "Non Deposit transaction found.".to_string();
 
-            ic_canister_log::log!(DEBUG, "Signature: {} -> {}", sig, error_msg);
+            ic_canister_log::log!(DEBUG, "Signature: {sig} -> {error_msg}.");
 
             invalid_transactions.push(InvalidTransaction::new(sig, error_msg))
         }

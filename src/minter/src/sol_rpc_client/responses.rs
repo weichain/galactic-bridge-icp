@@ -1,13 +1,20 @@
 use serde::Deserialize;
 
-#[derive(Debug, Deserialize)]
-pub struct JsonRpcSignatureResponse<T> {
+#[derive(Debug, Deserialize, Clone)]
+pub struct JsonRpcError {
+    pub code: i32,
+    pub message: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct JsonRpcResponse<T> {
     pub jsonrpc: String,
-    pub result: Vec<T>,
+    pub result: Option<T>,
+    pub error: Option<JsonRpcError>,
     pub id: u64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct SignatureResponse {
     #[serde(rename = "blockTime")]
     pub block_time: u64,
@@ -19,21 +26,14 @@ pub struct SignatureResponse {
     pub slot: u64,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct JsonRpcTransactionResponse<T> {
-    pub jsonrpc: String,
-    pub result: Option<T>,
-    pub id: u64,
-}
-
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Header {
     pub numReadonlySignedAccounts: u64,
     pub numReadonlyUnsignedAccounts: u64,
     pub numRequiredSignatures: u64,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Instruction {
     pub accounts: Vec<u64>,
     pub data: String,
@@ -41,7 +41,7 @@ pub struct Instruction {
     pub stackHeight: Option<u64>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Message {
     pub accountKeys: Vec<String>,
     pub header: Header,
@@ -49,7 +49,7 @@ pub struct Message {
     pub recentBlockhash: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Meta {
     pub computeUnitsConsumed: u64,
     pub err: Option<serde_json::Value>,
@@ -65,18 +65,18 @@ pub struct Meta {
     pub status: Status,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Status {
     pub Ok: Option<serde_json::Value>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct LoadedAddresses {
     pub readonly: Vec<serde_json::Value>,
     pub writable: Vec<serde_json::Value>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Transaction {
     pub message: Message,
     pub signatures: Vec<String>,

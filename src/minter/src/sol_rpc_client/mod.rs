@@ -2,7 +2,7 @@ use crate::lifecycle::SolanaNetwork;
 use crate::sol_rpc_client::providers::{RpcNodeProvider, MAINNET_PROVIDERS, TESTNET_PROVIDERS};
 use crate::sol_rpc_client::requests::GetSignaturesForAddressRequest;
 use crate::sol_rpc_client::responses::{
-    GetTransactionResponse, JsonRpcSignatureResponse, JsonRpcTransactionResponse, SignatureResponse,
+    GetTransactionResponse, JsonRpcResponse, SignatureResponse,
 };
 use crate::sol_rpc_client::types::{
     ConfirmationStatus, RpcMethod, HEADER_SIZE_LIMIT, SIGNATURE_RESPONSE_SIZE_ESTIMATE,
@@ -10,8 +10,11 @@ use crate::sol_rpc_client::types::{
 };
 use crate::state::{read_state, State};
 
-use ic_cdk::api::management_canister::http_request::{
-    http_request, CanisterHttpRequestArgument, HttpHeader, HttpMethod,
+use ic_cdk::api::{
+    call::RejectionCode,
+    management_canister::http_request::{
+        http_request, CanisterHttpRequestArgument, HttpHeader, HttpMethod,
+    },
 };
 use serde_json::json;
 use std::collections::HashMap;
@@ -29,12 +32,36 @@ pub struct SolRpcClient {
 
 #[derive(Debug)]
 pub enum SolRcpError {
-    RpcRequestFail(String),
+    RequestFail(String),
+    JsonRpcFail(String),
+    FromUtf8Fail(String),
+    FromStringOfJsonFail(String),
+    ToStringOfJsonFail(String),
 }
 
 impl SolRcpError {
-    pub fn new_rpc_request_fail(msg: &str) -> Self {
-        SolRcpError::RpcRequestFail(format!("The http_request resulted into error. {}", msg))
+    pub fn new_request_fail(code: RejectionCode, msg: &str) -> Self {
+        SolRcpError::RequestFail(format!(
+            "The http_request resulted into error. RejectionCode: {code:?}, Error: {msg}",
+        ))
+    }
+
+    pub fn new_json_rpc_fail(code: i32, msg: &str) -> Self {
+        SolRcpError::JsonRpcFail(format!(
+            "Json response contains error. Code: {code:?}, Error: {msg}",
+        ))
+    }
+
+    pub fn new_from_utf8_fail(err: &str) -> Self {
+        SolRcpError::FromUtf8Fail(format!("FromUtf8Error. {}", err))
+    }
+
+    pub fn new_from_string_of_json_fail(err: &str) -> Self {
+        SolRcpError::ToStringOfJsonFail(format!("FromStringOfJsonError. {}", err))
+    }
+
+    pub fn new_to_string_of_json_fail(err: &str) -> Self {
+        SolRcpError::ToStringOfJsonFail(format!("ToStringOfJsonError. {}", err))
     }
 }
 
@@ -85,14 +112,10 @@ impl SolRpcClient {
 
                 match str_body {
                     Ok(str_body) => Ok(str_body),
-                    Err(error) => Err(SolRcpError::new_rpc_request_fail(&format!(
-                        "FromUtf8Error: {error}"
-                    ))),
+                    Err(error) => Err(SolRcpError::new_from_utf8_fail(&error.to_string())),
                 }
             }
-            Err((r, m)) => Err(SolRcpError::new_rpc_request_fail(&format!(
-                "RejectionCode: {r:?}, Error: {m}"
-            ))),
+            Err((r, m)) => Err(SolRcpError::new_request_fail(r, &m)),
         }
     }
 
@@ -119,9 +142,7 @@ impl SolRpcClient {
             "params": params
         }));
         let payload = if let Err(error) = payload {
-            return Err(SolRcpError::new_rpc_request_fail(&format!(
-                "ToStringOfJsonError: {error}"
-            )));
+            return Err(SolRcpError::new_to_string_of_json_fail(&error.to_string()));
         } else {
             payload.unwrap()
         };
@@ -132,12 +153,24 @@ impl SolRpcClient {
 
         match self.rpc_call(payload, effective_size_estimate).await {
             Ok(response) => {
-                match serde_json::from_str::<JsonRpcSignatureResponse<SignatureResponse>>(&response)
-                {
-                    Ok(payload) => Ok(payload.result),
-                    Err(error) => Err(SolRcpError::new_rpc_request_fail(&format!(
-                        "FromStringOfJsonError: {error}"
-                    ))),
+                let json_response =
+                    serde_json::from_str::<JsonRpcResponse<Vec<SignatureResponse>>>(&response);
+
+                // Check if the response is valid
+                match json_response {
+                    Ok(json_response) => {
+                        // In case error is present in the response ignore the result and return the error
+                        if let Some(error) = json_response.error {
+                            Err(SolRcpError::new_json_rpc_fail(error.code, &error.message))
+                        } else {
+                            Ok(json_response.result.unwrap())
+                        }
+                    }
+                    Err(error) => {
+                        return Err(SolRcpError::new_from_string_of_json_fail(
+                            &error.to_string(),
+                        ))
+                    }
                 }
             }
             Err(error) => return Err(error),
@@ -147,7 +180,8 @@ impl SolRpcClient {
     pub async fn get_transactions(
         &self,
         signatures: Vec<String>,
-    ) -> Result<HashMap<String, Option<GetTransactionResponse>>, SolRcpError> {
+    ) -> Result<HashMap<String, Result<Option<GetTransactionResponse>, SolRcpError>>, SolRcpError>
+    {
         let mut rpc_request = Vec::new();
         let mut id = 1;
 
@@ -164,9 +198,7 @@ impl SolRpcClient {
 
         let payload = serde_json::to_string(&rpc_request);
         let payload = if let Err(error) = payload {
-            return Err(SolRcpError::new_rpc_request_fail(&format!(
-                "ToStringOfJsonError: {error}"
-            )));
+            return Err(SolRcpError::new_to_string_of_json_fail(&error.to_string()));
         } else {
             payload.unwrap()
         };
@@ -177,24 +209,35 @@ impl SolRpcClient {
 
         match self.rpc_call(payload, effective_size_estimate).await {
             Ok(response) => {
-                match serde_json::from_str::<Vec<JsonRpcTransactionResponse<GetTransactionResponse>>>(
-                    &response,
-                ) {
-                    Ok(payload) => {
-                        let mut map = HashMap::<String, Option<GetTransactionResponse>>::new();
+                let json_responses =
+                    serde_json::from_str::<Vec<JsonRpcResponse<GetTransactionResponse>>>(&response);
 
-                        payload
+                match json_responses {
+                    Ok(responses) => {
+                        let mut map = HashMap::<
+                            String,
+                            Result<Option<GetTransactionResponse>, SolRcpError>,
+                        >::new();
+
+                        responses
                             .into_iter()
                             .enumerate()
-                            .for_each(|(index, transaction)| {
-                                map.insert(signatures[index].clone(), transaction.result);
+                            .for_each(|(index, response)| {
+                                // In case error is present in the response ignore the result and return the error
+                                let result = if let Some(error) = response.error {
+                                    Err(SolRcpError::new_json_rpc_fail(error.code, &error.message))
+                                } else {
+                                    Ok(response.result)
+                                };
+
+                                map.insert(signatures[index].clone(), result);
                             });
 
                         Ok(map)
                     }
-                    Err(error) => Err(SolRcpError::new_rpc_request_fail(&format!(
-                        "FromStringOfJsonError: {error}"
-                    ))),
+                    Err(error) => Err(SolRcpError::new_from_string_of_json_fail(
+                        &error.to_string(),
+                    )),
                 }
             }
             Err(error) => return Err(error),

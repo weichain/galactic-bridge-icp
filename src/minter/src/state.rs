@@ -143,13 +143,13 @@ impl State {
         }
     }
 
-    pub fn record_skipped_signature_ranges(&mut self, range: SkippedSignatureRange) {
+    pub fn record_skipped_signature_range(&mut self, range: SkippedSignatureRange) {
         _ = self
             .skipped_signature_ranges
             .insert(format!("{}-{}", range.before, range.until), range);
     }
 
-    pub fn remove_skipped_signature_ranges(&mut self, range: SkippedSignatureRange) {
+    pub fn remove_skipped_signature_range(&mut self, range: SkippedSignatureRange) {
         _ = self
             .skipped_signature_ranges
             .remove(&format!("{}-{}", range.before, range.until));
