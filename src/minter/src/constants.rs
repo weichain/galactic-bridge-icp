@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use serde_bytes::ByteBuf;
 
 // The derivation path to use for ECDSA secp256k1.
@@ -12,3 +14,5 @@ use serde_bytes::ByteBuf;
 // Fifth component: Non-hardened derivation for index (0)
 // vec![1],
 pub const DERIVATION_PATH: Vec<ByteBuf> = vec![];
+
+pub const SCRAPPING_ETH_LOGS_INTERVAL: Duration = Duration::from_secs(3 * 60);

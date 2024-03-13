@@ -1,29 +1,32 @@
+use minicbor::{Decode, Encode};
+
 pub trait Retriable {
     fn get_retries(&self) -> u8;
     fn increment_retries(&mut self);
 }
 
-#[derive(Debug, PartialEq, Clone)]
-pub struct SkippedSignatureRange {
-    pub before: String,
-    pub until: String,
-    pub error: String,
+#[derive(Debug, Encode, Decode, PartialEq, Clone, Eq)]
+pub struct SkippedSolSignatureRange {
+    #[n(0)]
+    pub before_sol_signature: String,
+    #[n(1)]
+    pub until_sol_signature: String,
+    #[n(2)]
     retries: u8,
 }
 
-impl SkippedSignatureRange {
-    // Constructor function to create a new SkippedSignatureRange
-    pub fn new(before: String, until: String, error: String) -> Self {
-        SkippedSignatureRange {
-            before,
-            until,
-            error,
+impl SkippedSolSignatureRange {
+    // Constructor function to create a new SkippedSolSignatureRange
+    pub fn new(before: String, until: String) -> Self {
+        SkippedSolSignatureRange {
+            before_sol_signature: before,
+            until_sol_signature: until,
             retries: 0,
         }
     }
 }
 
-impl Retriable for SkippedSignatureRange {
+impl Retriable for SkippedSolSignatureRange {
     fn get_retries(&self) -> u8 {
         self.retries
     }
@@ -33,25 +36,25 @@ impl Retriable for SkippedSignatureRange {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
-pub struct SkippedTransaction {
-    pub signature: String,
-    pub error: String,
+#[derive(Debug, Encode, Decode, PartialEq, Clone, Eq)]
+pub struct SkippedSolTransaction {
+    #[n(0)]
+    pub sol_signature: String,
+    #[n(1)]
     retries: u8,
 }
 
-impl SkippedTransaction {
-    // Constructor function to create a new SkippedTransaction
-    pub fn new(signature: String, error: String) -> Self {
-        SkippedTransaction {
-            signature,
-            error,
+impl SkippedSolTransaction {
+    // Constructor function to create a new SkippedSolTransaction
+    pub fn new(signature: String) -> Self {
+        SkippedSolTransaction {
+            sol_signature: signature,
             retries: 0,
         }
     }
 }
 
-impl Retriable for SkippedTransaction {
+impl Retriable for SkippedSolTransaction {
     fn get_retries(&self) -> u8 {
         self.retries
     }
@@ -61,22 +64,26 @@ impl Retriable for SkippedTransaction {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
-pub struct InvalidTransaction {
-    pub signature: String,
-    pub info: String,
+#[derive(Debug, Encode, Decode, PartialEq, Clone, Eq)]
+pub struct InvalidSolTransaction {
+    #[n(0)]
+    pub sol_signature: String,
 }
 
-impl InvalidTransaction {
-    // Constructor function to create a new InvalidTransaction
-    pub fn new(signature: String, info: String) -> Self {
-        InvalidTransaction { signature, info }
+impl InvalidSolTransaction {
+    // Constructor function to create a new InvalidSolTransaction
+    pub fn new(signature: String) -> Self {
+        InvalidSolTransaction {
+            sol_signature: signature,
+        }
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Encode, Decode, PartialEq, Clone, Eq)]
 pub struct DepositEvent {
+    #[n(0)]
     pub address_icp: String,
+    #[n(1)]
     pub amount: u64,
 }
 

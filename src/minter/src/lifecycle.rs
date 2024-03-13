@@ -41,22 +41,34 @@ impl TryFrom<InitArg> for State {
         )?;
 
         let state = Self {
+            // solana related config
             solana_network,
             solana_contract_address,
             solana_initial_transaction,
+
+            // icp related config
             ecdsa_key_name,
             ecdsa_public_key: None,
             ledger_id,
             minimum_withdrawal_amount,
 
+            // scrapper config
             last_scraped_transaction: None,
 
-            active_tasks: Default::default(),
-
+            // failed calls
             skipped_signature_ranges: Default::default(),
             skipped_transactions: Default::default(),
+
+            // invalid transactions - cannot be parsed, does not hold deposit event, blocked user, etc.
             invalid_transactions: Default::default(),
-            events_to_mint: Default::default(),
+            // valid transaction events that have been minted
+            accepted_events: Default::default(),
+            // minted events
+            minted_events: Default::default(),
+
+            http_request_counter: 0,
+
+            active_tasks: Default::default(),
         };
 
         state.validate_config()?;
@@ -73,7 +85,7 @@ pub struct UpgradeArg {
 }
 
 // TODO: implement it
-// pub fn post_upgrade(upgrade_args: Option<UpgradeArg>) {}
+pub fn post_upgrade(upgrade_args: Option<UpgradeArg>) {}
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
 pub enum MinterArg {

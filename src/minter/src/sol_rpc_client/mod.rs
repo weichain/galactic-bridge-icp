@@ -83,7 +83,7 @@ impl SolRpcClient {
 
     async fn rpc_call(
         &self,
-        payload: String,
+        payload: &String,
         effective_size_estimate: u64,
     ) -> Result<String, SolRcpError> {
         // Details of the values used in the following lines can be found here:
@@ -122,16 +122,16 @@ impl SolRpcClient {
     pub async fn get_signatures_for_address(
         &self,
         limit: u64,
-        before: Option<String>,
-        until: String,
+        before: Option<&String>,
+        until: &String,
     ) -> Result<Vec<SignatureResponse>, SolRcpError> {
         let params: [&dyn erased_serde::Serialize; 2] = [
             &read_state(|s| s.solana_contract_address.clone()),
             &GetSignaturesForAddressRequest {
                 limit: Some(limit),
-                commitment: Some(ConfirmationStatus::Finalized.as_str()),
-                before,
-                until: Some(until),
+                commitment: Some(ConfirmationStatus::Finalized.as_str().to_string()),
+                before: before.map(|s| s.to_string()),
+                until: Some(until.to_string()),
             },
         ];
 
@@ -151,7 +151,7 @@ impl SolRpcClient {
         let effective_size_estimate: u64 =
             limit * SIGNATURE_RESPONSE_SIZE_ESTIMATE + HEADER_SIZE_LIMIT;
 
-        match self.rpc_call(payload, effective_size_estimate).await {
+        match self.rpc_call(&payload, effective_size_estimate).await {
             Ok(response) => {
                 let json_response =
                     serde_json::from_str::<JsonRpcResponse<Vec<SignatureResponse>>>(&response);
@@ -179,7 +179,7 @@ impl SolRpcClient {
 
     pub async fn get_transactions(
         &self,
-        signatures: Vec<String>,
+        signatures: Vec<&String>,
     ) -> Result<HashMap<String, Result<Option<GetTransactionResponse>, SolRcpError>>, SolRcpError>
     {
         let mut rpc_request = Vec::new();
@@ -207,7 +207,7 @@ impl SolRpcClient {
         let effective_size_estimate: u64 =
             (signatures.len() as u64) * TRANSACTION_RESPONSE_SIZE_ESTIMATE + HEADER_SIZE_LIMIT;
 
-        match self.rpc_call(payload, effective_size_estimate).await {
+        match self.rpc_call(&payload, effective_size_estimate).await {
             Ok(response) => {
                 let json_responses =
                     serde_json::from_str::<Vec<JsonRpcResponse<GetTransactionResponse>>>(&response);
@@ -230,7 +230,7 @@ impl SolRpcClient {
                                     Ok(response.result)
                                 };
 
-                                map.insert(signatures[index].clone(), result);
+                                map.insert(signatures[index].to_string(), result);
                             });
 
                         Ok(map)

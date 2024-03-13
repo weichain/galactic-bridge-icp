@@ -1,56 +1,44 @@
-use crate::events::{DepositEvent, InvalidTransaction, SkippedSignatureRange, SkippedTransaction};
+use crate::events::{
+    DepositEvent, InvalidSolTransaction, SkippedSolSignatureRange, SkippedSolTransaction,
+};
 use crate::guard::TimerGuard;
 use crate::logs::DEBUG;
 use crate::sol_rpc_client::responses::{GetTransactionResponse, SignatureResponse};
 use crate::sol_rpc_client::SolRpcClient;
-use crate::state::{mutate_state, read_state, State, TaskType};
-
-use std::collections::HashMap;
+use crate::state::audit::process_event;
+use crate::state::event::EventType;
+use crate::state::{mutate_state, read_state, TaskType};
 
 const GET_SIGNATURES_BY_ADDRESS_LIMIT: u64 = 10;
 const GET_TRANSACTIONS_LIMIT: u64 = 5;
 
-pub async fn scrap_solana_contract() {
+pub async fn scrap_solana_logs() {
     let _guard = match TimerGuard::new(TaskType::ScrapSolLogs) {
         Ok(guard) => guard,
         Err(_) => return,
     };
 
     let rpc_client = read_state(SolRpcClient::from_state);
+    let until_signature = read_state(|s| s.get_last_scraped_transaction());
 
-    let (signatures_result, skipped_signature_range) =
-        scrap_signatures_with_limit(&rpc_client, None).await;
+    let signatures =
+        scrap_signature_range_with_limit(&rpc_client, None, &until_signature, None).await;
 
-    let signatures: Vec<String> = signatures_result
-        .iter()
-        .map(|response| response.signature.to_string())
-        .collect();
+    let transactions =
+        scrap_transactions_with_limit(&rpc_client, signatures.iter().collect(), None).await;
 
-    let (transactions_result, skipped_transactions) =
-        scrap_transactions_with_limit(&rpc_client, signatures, None).await;
-
-    let (deposit_events, invalid_transactions) = parse_log_messages(transactions_result).await;
-
-    // update last scraped transaction
-    mutate_state(|s: &mut State| {
-        s.last_scraped_transaction = signatures_result.first().map(|r| r.signature.clone());
-
-        skipped_signature_range.map(|range| {
-            s.record_skipped_signature_range(range);
-        });
-
-        skipped_transactions.iter().for_each(|tx| {
-            s.record_skipped_transaction(tx.clone());
-        });
-
-        invalid_transactions.iter().for_each(|tx| {
-            s.record_invalid_transaction(tx.clone());
-        });
-
-        deposit_events.iter().for_each(|(k, v)| {
-            s.events_to_mint.insert(k.clone(), v.clone());
-        });
+    transactions.last().map(|tx| {
+        mutate_state(|s| {
+            process_event(
+                s,
+                EventType::SyncedToSignature {
+                    signature: tx.transaction.signatures[0].to_string(),
+                },
+            )
+        })
     });
+
+    parse_log_messages(transactions.iter().collect()).await;
 }
 
 // Method relies on the getSignaturesForAddress RPC call to get the signatures for the address:
@@ -68,14 +56,18 @@ pub async fn scrap_solana_contract() {
 // If first call fails range is not marked as skipped (it will be covered on next calls).
 // But in case subsequent call fails (it means gap appears in the data) scrap process stops and the failed
 // range is marked as skipped (for later retry)!
-async fn scrap_signatures_with_limit(
+async fn scrap_signature_range_with_limit(
     rpc_client: &SolRpcClient,
+    mut before_signature: Option<String>,
+    until_signature: &String,
     limit: Option<u64>,
-) -> (Vec<SignatureResponse>, Option<SkippedSignatureRange>) {
+) -> Vec<String> {
     let limit = limit.unwrap_or(GET_SIGNATURES_BY_ADDRESS_LIMIT);
     let mut signatures_result: Vec<SignatureResponse> = Vec::new();
-    let mut before_signature: Option<String> = None;
-    let until_signature = read_state(|s| s.get_last_scraped_transaction());
+
+    fn transform_signature_response(response: &Vec<SignatureResponse>) -> Vec<String> {
+        response.iter().map(|r| r.signature.to_string()).collect()
+    }
 
     loop {
         ic_canister_log::log!(
@@ -84,11 +76,10 @@ async fn scrap_signatures_with_limit(
         );
 
         // get signatures for chunk
-        let chunk = rpc_client
-            .get_signatures_for_address(limit, before_signature.clone(), until_signature.clone())
-            .await;
-
-        match chunk {
+        match rpc_client
+            .get_signatures_for_address(limit, before_signature.as_ref(), until_signature)
+            .await
+        {
             Ok(signatures) => {
                 // if no signatures are available, we are done
                 if signatures.is_empty() {
@@ -97,13 +88,13 @@ async fn scrap_signatures_with_limit(
                         "No signatures for address available: limit: {limit}, before: {before_signature:?}, until: {until_signature}.",
                     );
 
-                    return (signatures_result, None);
+                    return transform_signature_response(&signatures_result);
                 }
 
                 // if signatures are available, we continue with the next chunk
                 // store the last signature to use it as before for the next chunk
                 let last_signature = signatures.last().unwrap();
-                before_signature = Some(last_signature.signature.clone());
+                before_signature = Some(last_signature.signature.to_string());
                 signatures_result.extend(signatures);
             }
             Err(error) => {
@@ -112,18 +103,23 @@ async fn scrap_signatures_with_limit(
                 // if rpc request fails to get signatures, cannot continue, skip the range and retry later
                 if let Some(before) = before_signature {
                     // in case "before_signature" is not None return the skipped range
-                    return (
-                        signatures_result,
-                        Some(SkippedSignatureRange::new(
-                            before,
-                            until_signature,
-                            format!("{:?}", error),
-                        )),
-                    );
+
+                    mutate_state(|s| {
+                        process_event(
+                            s,
+                            EventType::SkippedSolSignatureRange {
+                                range: SkippedSolSignatureRange::new(
+                                    before.to_string(),
+                                    until_signature.to_string(),
+                                ),
+                                reason: format!("{:?}", error),
+                            },
+                        )
+                    });
                 }
 
                 // in case rpc request fails on first run ("before_signature" is None), skip the whole range
-                return (signatures_result, None);
+                return transform_signature_response(&signatures_result);
             }
         };
     }
@@ -131,44 +127,50 @@ async fn scrap_signatures_with_limit(
 
 async fn scrap_transactions_with_limit(
     rpc_client: &SolRpcClient,
-    signatures: Vec<String>,
+    signatures: Vec<&String>,
     limit: Option<u64>,
-) -> (Vec<GetTransactionResponse>, Vec<SkippedTransaction>) {
+) -> Vec<GetTransactionResponse> {
     let limit = limit.unwrap_or(GET_TRANSACTIONS_LIMIT);
     let mut transactions_result: Vec<GetTransactionResponse> = Vec::new();
-    let mut skipped_transactions: Vec<SkippedTransaction> = Vec::new();
 
     for chunk in signatures.chunks(limit as usize) {
-        ic_canister_log::log!(DEBUG, "Getting transactions: {chunk:?}.");
-
-        let transactions_chunk = rpc_client.get_transactions(chunk.to_vec()).await;
-
-        match transactions_chunk {
+        match rpc_client.get_transactions(chunk.to_vec()).await {
             Ok(txs) => {
                 txs.iter().for_each(|(k, v)| {
                     // if tx call failed
                     if let Err(error) = v {
                         ic_canister_log::log!(DEBUG, "Signature: {k} -> Failed with {error:?}.",);
 
-                        skipped_transactions.push(SkippedTransaction::new(
-                            k.to_string(),
-                            format!("{error:?}",),
-                        ));
+                        // skip the transaction and retry later
+                        mutate_state(|s| {
+                            process_event(
+                                s,
+                                EventType::SkippedSolTransaction {
+                                    sol_tx: SkippedSolTransaction::new(k.to_string()),
+                                    reason: format!("{:?}", error),
+                                },
+                            )
+                        });
                     } else {
                         // if tx call returned a proper object
                         if let Some(tx) = v.as_ref().unwrap() {
                             transactions_result.push(tx.clone());
                         } else {
+                            // if tx call returned None
                             ic_canister_log::log!(
                                 DEBUG,
-                                "Signature: {k} -> Transaction not found.",
+                                "Signature: {k} -> Transaction not found."
                             );
 
-                            // if tx call returned NONE
-                            skipped_transactions.push(SkippedTransaction::new(
-                                k.to_string(),
-                                "Transaction not found".to_string(),
-                            ));
+                            mutate_state(|s| {
+                                process_event(
+                                    s,
+                                    EventType::SkippedSolTransaction {
+                                        sol_tx: SkippedSolTransaction::new(k.to_string()),
+                                        reason: "Transaction not found".to_string(),
+                                    },
+                                )
+                            });
                         }
                     }
                 })
@@ -178,66 +180,89 @@ async fn scrap_transactions_with_limit(
                 // if RPC call failed to get transactions, skip the transactions and retry later
                 ic_canister_log::log!(DEBUG, "Failed to get transactions: {error:?}.");
 
-                skipped_transactions.extend(chunk.iter().map(|signature| {
-                    SkippedTransaction::new(signature.clone(), format!("{error:?}"))
-                }));
+                mutate_state(|s| {
+                    chunk.iter().for_each(|signature| {
+                        process_event(
+                            s,
+                            EventType::SkippedSolTransaction {
+                                sol_tx: SkippedSolTransaction::new(signature.to_string()),
+                                reason: format!("{error:?}"),
+                            },
+                        )
+                    });
+                });
             }
         };
     }
 
-    return (transactions_result, skipped_transactions);
+    return transactions_result;
 }
 
-async fn parse_log_messages(
-    transactions: Vec<GetTransactionResponse>,
-) -> (HashMap<String, DepositEvent>, Vec<InvalidTransaction>) {
+async fn parse_log_messages(transactions: Vec<&GetTransactionResponse>) {
     // transform to deposit event
-    let deposit_msg: String = String::from("Program log: Instruction: Deposit");
-    let success_msg: String = format!(
+    let deposit_msg = &String::from("Program log: Instruction: Deposit");
+    let success_msg = &format!(
         "Program {} success",
         &read_state(|s| s.solana_contract_address.clone())
     );
-    let program_data_msg: String = String::from("Program data: ");
-
-    // filter transactions with deposit event
-    let mut deposits = HashMap::<String, DepositEvent>::new();
-    // invalid transactions (non deposit)
-    let mut invalid_transactions = Vec::<InvalidTransaction>::new();
+    let program_data_msg = &String::from("Program data: ");
 
     for transaction in transactions {
         let msgs = &transaction.meta.logMessages;
-        let sig = transaction.transaction.signatures[0].to_string();
+        let signature: String = transaction.transaction.signatures[0].to_string();
 
-        if msgs.contains(&deposit_msg)
-            && msgs.contains(&success_msg)
-            && msgs.iter().any(|s| s.starts_with(&program_data_msg))
+        if msgs.contains(deposit_msg)
+            && msgs.contains(success_msg)
+            && msgs.iter().any(|s| s.starts_with(program_data_msg))
         {
-            if let Some(program_data) = msgs.iter().find(|s| s.starts_with(&program_data_msg)) {
+            if let Some(program_data) = msgs.iter().find(|s| s.starts_with(program_data_msg)) {
                 // Extract the data after "Program data: "
-                let base64_data = program_data.trim_start_matches(&program_data_msg);
+                let base64_data = program_data.trim_start_matches(program_data_msg);
                 let deposit_event = DepositEvent::from(base64_data);
 
                 ic_canister_log::log!(
                     DEBUG,
-                    "Signature: {sig} -> Deposit transaction found: {deposit_event:?}.",
+                    "Signature: {signature} -> Deposit transaction found: {deposit_event:?}.",
                 );
 
-                deposits.insert(sig, deposit_event);
+                mutate_state(|s| {
+                    process_event(
+                        s,
+                        EventType::AcceptedDeposit {
+                            deposit: deposit_event,
+                            sol_sig: signature,
+                        },
+                    )
+                });
             } else {
                 let error_msg = "Deposit transaction found. Invalid deposit data.".to_string();
 
-                ic_canister_log::log!(DEBUG, "Signature: {sig} -> {error_msg}.");
+                ic_canister_log::log!(DEBUG, "Signature: {signature} -> {error_msg}.");
 
-                invalid_transactions.push(InvalidTransaction::new(sig, error_msg))
+                mutate_state(|s| {
+                    process_event(
+                        s,
+                        EventType::InvalidDeposit {
+                            sol_tx: InvalidSolTransaction::new(signature),
+                            reason: error_msg,
+                        },
+                    )
+                });
             }
         } else {
             let error_msg = "Non Deposit transaction found.".to_string();
 
-            ic_canister_log::log!(DEBUG, "Signature: {sig} -> {error_msg}.");
+            ic_canister_log::log!(DEBUG, "Signature: {signature} -> {error_msg}.");
 
-            invalid_transactions.push(InvalidTransaction::new(sig, error_msg))
+            mutate_state(|s| {
+                process_event(
+                    s,
+                    EventType::InvalidDeposit {
+                        sol_tx: InvalidSolTransaction::new(signature),
+                        reason: error_msg,
+                    },
+                )
+            });
         }
     }
-
-    return (deposits, invalid_transactions);
 }

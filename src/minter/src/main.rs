@@ -1,8 +1,10 @@
-use minter::constants::DERIVATION_PATH;
-use minter::deposit::scrap_solana_contract;
-use minter::lifecycle::MinterArg;
+use minter::constants::SCRAPPING_ETH_LOGS_INTERVAL;
+use minter::deposit::scrap_solana_logs;
+use minter::lifecycle::{post_upgrade as lifecycle_post_upgrade, MinterArg};
 use minter::logs::INFO;
+use minter::state::event::EventType;
 use minter::state::{lazy_call_ecdsa_public_key, read_state, State, STATE};
+use minter::storage;
 use minter::types::{
     Coupon, ECDSAPublicKey, ECDSAPublicKeyReply, EcdsaCurve, EcdsaKeyId, SignWithECDSA,
     SignWithECDSAReply, SignatureVerificationReply,
@@ -10,7 +12,7 @@ use minter::types::{
 
 use candid::{candid_method, Nat, Principal};
 use ic_cdk::{api::call::call_with_payment, call};
-use ic_cdk_macros::{init, query, update};
+use ic_cdk_macros::{init, post_upgrade, pre_upgrade, query, update};
 use icrc_ledger_client_cdk::{CdkRuntime, ICRC1Client};
 use icrc_ledger_types::{icrc1::transfer::TransferArg, icrc2::transfer_from::TransferFromArgs};
 use num_traits::ToPrimitive;
@@ -22,14 +24,20 @@ fn setup_timers() {
     ic_cdk_timers::set_timer(Duration::from_secs(0), || {
         // Initialize the minter's public key to make the address known.
         ic_cdk::spawn(async {
-            let _ = lazy_call_ecdsa_public_key().await;
+            lazy_call_ecdsa_public_key().await;
         })
     });
 
     // Start scraping logs immediately after the install, then repeat with the interval.
-    ic_cdk_timers::set_timer(Duration::from_secs(0), || {
-        ic_cdk::spawn(scrap_solana_contract())
+    ic_cdk_timers::set_timer(
+        Duration::from_secs(0),
+        || ic_cdk::spawn(scrap_solana_logs()),
+    );
+    ic_cdk_timers::set_timer_interval(SCRAPPING_ETH_LOGS_INTERVAL, || {
+        ic_cdk::spawn(scrap_solana_logs())
     });
+
+    // TODO: maybe need to trigger retry on some interval
 }
 
 #[candid_method(init)]
@@ -55,6 +63,29 @@ pub fn init(args: MinterArg) {
     setup_timers();
 }
 
+#[pre_upgrade]
+fn pre_upgrade() {
+    read_state(|s| {
+        storage::record_event(EventType::SyncedToSignature {
+            signature: s.get_last_scraped_transaction(),
+        });
+    });
+}
+
+#[post_upgrade]
+fn post_upgrade(minter_arg: Option<MinterArg>) {
+    match minter_arg {
+        Some(MinterArg::Init(_)) => {
+            ic_cdk::trap("cannot upgrade canister state with init args");
+        }
+        Some(MinterArg::Upgrade(upgrade_args)) => lifecycle_post_upgrade(Some(upgrade_args)),
+        None => lifecycle_post_upgrade(None),
+    }
+
+    setup_timers();
+}
+
+//////////////////////////
 #[update]
 pub async fn get_address() -> (String, String) {
     read_state(|s| (s.compressed_public_key(), s.uncompressed_public_key()))

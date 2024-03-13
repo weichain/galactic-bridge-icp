@@ -24,10 +24,10 @@ pub enum RpcMethod {
 }
 
 impl RpcMethod {
-    pub fn as_str(&self) -> String {
+    pub fn as_str(&self) -> &str {
         match self {
-            RpcMethod::GetSignaturesForAddress => "getSignaturesForAddress".to_string(),
-            RpcMethod::GetTransaction => "getTransaction".to_string(),
+            RpcMethod::GetSignaturesForAddress => "getSignaturesForAddress",
+            RpcMethod::GetTransaction => "getTransaction",
         }
     }
 }
@@ -40,11 +40,11 @@ pub enum ConfirmationStatus {
 }
 
 impl ConfirmationStatus {
-    pub fn as_str(&self) -> String {
+    pub fn as_str(&self) -> &str {
         match self {
-            ConfirmationStatus::Finalized => "finalized".to_string(),
-            ConfirmationStatus::Confirmed => "confirmed".to_string(),
-            ConfirmationStatus::Processed => "processed".to_string(),
+            ConfirmationStatus::Finalized => "finalized",
+            ConfirmationStatus::Confirmed => "confirmed",
+            ConfirmationStatus::Processed => "processed",
         }
     }
 }

@@ -1,6 +1,8 @@
 use crate::constants::DERIVATION_PATH;
-use crate::events::{DepositEvent, InvalidTransaction, SkippedSignatureRange, SkippedTransaction};
-use crate::lifecycle::SolanaNetwork;
+use crate::events::{
+    DepositEvent, InvalidSolTransaction, SkippedSolSignatureRange, SkippedSolTransaction,
+};
+use crate::lifecycle::{SolanaNetwork, UpgradeArg};
 use crate::logs::DEBUG;
 
 use candid::Principal;
@@ -12,6 +14,9 @@ use std::{
     collections::{HashMap, HashSet},
 };
 use strum_macros::EnumIter;
+
+pub mod audit;
+pub mod event;
 
 thread_local! {
   pub static STATE: RefCell<Option<State>> = RefCell::default();
@@ -52,26 +57,20 @@ pub struct State {
     // internals
     pub last_scraped_transaction: Option<String>,
 
+    pub skipped_signature_ranges: HashMap<String, SkippedSolSignatureRange>,
+    pub skipped_transactions: HashMap<String, SkippedSolTransaction>,
+    pub invalid_transactions: HashMap<String, InvalidSolTransaction>,
+    pub accepted_events: HashMap<String, DepositEvent>,
+    // TODO: is 64 enough for block index
+    pub minted_events: HashMap<u64, DepositEvent>,
+
+    /// Number of HTTP outcalls since the last upgrade.
+    /// Used to correlate request and response in logs.
+    /// TODO:
+    pub http_request_counter: u64,
+
     /// Locks preventing concurrent execution timer tasks
     pub active_tasks: HashSet<TaskType>,
-
-    pub skipped_signature_ranges: HashMap<String, SkippedSignatureRange>,
-    pub skipped_transactions: HashMap<String, SkippedTransaction>,
-    pub invalid_transactions: HashMap<String, InvalidTransaction>,
-    pub events_to_mint: HashMap<String, DepositEvent>,
-    // TODO: no clue if I need this
-    // /// Current balance of ETH held by minter.
-    // /// Computed based on audit events.
-    // pub eth_balance: EthBalance,
-    // /// Per-principal lock for pending_retrieve_eth_requests
-    // pub retrieve_eth_principals: BTreeSet<Principal>,
-
-    // /// Number of HTTP outcalls since the last upgrade.
-    // /// Used to correlate request and response in logs.
-    // pub http_request_counter: u64,
-    // /// Number of HTTP outcalls since the last upgrade.
-    // /// Used to correlate request and response in logs.
-    // pub http_request_counter: u64,
 }
 
 impl State {
@@ -104,6 +103,8 @@ impl State {
         Ok(())
     }
 
+    fn upgrade(&mut self, upgrade_args: UpgradeArg) -> () {}
+
     // compressed public key in hex format - 33 bytes
     pub fn compressed_public_key(&self) -> String {
         let public_key = match &self.ecdsa_public_key {
@@ -135,6 +136,10 @@ impl State {
         self.solana_network
     }
 
+    pub fn record_last_scraped_transaction(&mut self, tx: &String) {
+        self.last_scraped_transaction = Some(tx.to_string());
+    }
+
     pub fn get_last_scraped_transaction(&self) -> String {
         if let Some(tx) = &self.last_scraped_transaction {
             tx.to_string()
@@ -143,34 +148,55 @@ impl State {
         }
     }
 
-    pub fn record_skipped_signature_range(&mut self, range: SkippedSignatureRange) {
-        _ = self
-            .skipped_signature_ranges
-            .insert(format!("{}-{}", range.before, range.until), range);
+    pub fn record_skipped_signature_range(&mut self, range: SkippedSolSignatureRange) {
+        _ = self.skipped_signature_ranges.insert(
+            format!(
+                "{}-{}",
+                range.before_sol_signature, range.until_sol_signature
+            ),
+            range,
+        );
     }
 
-    pub fn remove_skipped_signature_range(&mut self, range: SkippedSignatureRange) {
-        _ = self
-            .skipped_signature_ranges
-            .remove(&format!("{}-{}", range.before, range.until));
+    pub fn remove_skipped_signature_range(&mut self, range: SkippedSolSignatureRange) {
+        _ = self.skipped_signature_ranges.remove(&format!(
+            "{}-{}",
+            range.before_sol_signature, range.until_sol_signature
+        ));
     }
 
-    pub fn record_skipped_transaction(&mut self, tx: SkippedTransaction) {
+    pub fn record_skipped_transaction(&mut self, tx: SkippedSolTransaction) {
         _ = self
             .skipped_transactions
-            .insert(format!("{}", tx.signature), tx);
+            .insert(format!("{}", tx.sol_signature), tx);
     }
 
-    pub fn remove_skipped_transaction(&mut self, tx: SkippedTransaction) {
+    pub fn remove_skipped_transaction(&mut self, tx: SkippedSolTransaction) {
         _ = self
             .skipped_transactions
-            .remove(&format!("{}", tx.signature));
+            .remove(&format!("{}", tx.sol_signature));
     }
 
-    pub fn record_invalid_transaction(&mut self, tx: InvalidTransaction) {
+    pub fn record_invalid_transaction(&mut self, tx: InvalidSolTransaction) {
         _ = self
             .invalid_transactions
-            .insert(format!("{}", tx.signature), tx);
+            .insert(format!("{}", tx.sol_signature), tx);
+    }
+
+    pub fn remove_invalid_transaction(&mut self, tx: InvalidSolTransaction) {
+        _ = self
+            .invalid_transactions
+            .remove(&format!("{}", tx.sol_signature));
+    }
+
+    pub fn record_accepted_deposit(&mut self, sol_transaction: &String, de: DepositEvent) {
+        _ = self
+            .accepted_events
+            .insert(format!("{}", sol_transaction), de);
+    }
+
+    pub fn record_minted_deposit(&mut self, icp_mint_block_index: &u64, de: DepositEvent) {
+        _ = self.minted_events.insert(*icp_mint_block_index, de);
     }
 }
 
