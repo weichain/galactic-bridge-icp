@@ -80,14 +80,14 @@ impl InvalidSolTransaction {
 }
 
 #[derive(Debug, Encode, Decode, PartialEq, Clone, Eq)]
-pub struct DepositEvent {
+pub struct Deposit {
     #[n(0)]
     pub address_icp: String,
     #[n(1)]
     pub amount: u64,
 }
 
-impl From<&str> for DepositEvent {
+impl From<&str> for Deposit {
     fn from(s: &str) -> Self {
         use base64::prelude::*;
         let bytes = BASE64_STANDARD.decode(s).unwrap();
@@ -101,9 +101,17 @@ impl From<&str> for DepositEvent {
         let address_bytes = &bytes[12..bytes.len() - 8];
         let address_icp = String::from_utf8_lossy(&address_bytes);
 
-        DepositEvent {
+        Deposit {
             address_icp: address_icp.to_string(),
             amount,
         }
     }
+}
+
+#[derive(Debug, Encode, Decode, PartialEq, Clone, Eq)]
+pub struct DepositEvent {
+    #[n(0)]
+    pub deposit: Deposit,
+    #[n(1)]
+    pub sol_signature: String,
 }

@@ -1,5 +1,5 @@
 use crate::events::{
-    DepositEvent, InvalidSolTransaction, SkippedSolSignatureRange, SkippedSolTransaction,
+    Deposit, DepositEvent, InvalidSolTransaction, SkippedSolSignatureRange, SkippedSolTransaction,
 };
 use crate::guard::TimerGuard;
 use crate::logs::DEBUG;
@@ -119,6 +119,7 @@ async fn scrap_signature_range_with_limit(
                 }
 
                 // in case rpc request fails on first run ("before_signature" is None), skip the whole range
+                // no need to mark it again, it will be covered on next calls
                 return transform_signature_response(&signatures_result);
             }
         };
@@ -218,18 +219,18 @@ async fn parse_log_messages(transactions: Vec<&GetTransactionResponse>) {
             if let Some(program_data) = msgs.iter().find(|s| s.starts_with(program_data_msg)) {
                 // Extract the data after "Program data: "
                 let base64_data = program_data.trim_start_matches(program_data_msg);
-                let deposit_event = DepositEvent::from(base64_data);
+                let deposit = Deposit::from(base64_data);
 
                 ic_canister_log::log!(
                     DEBUG,
-                    "Signature: {signature} -> Deposit transaction found: {deposit_event:?}.",
+                    "Signature: {signature} -> Deposit transaction found: {deposit:?}.",
                 );
 
                 mutate_state(|s| {
                     process_event(
                         s,
                         EventType::AcceptedDeposit {
-                            deposit: deposit_event,
+                            deposit: deposit,
                             sol_sig: signature,
                         },
                     )

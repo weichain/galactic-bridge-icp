@@ -32,9 +32,10 @@ pub fn apply_state_transition(state: &mut State, payload: &EventType) {
         }
         EventType::MintedDeposit {
             deposit,
+            sol_sig,
             icp_mint_block_index,
         } => {
-            state.record_minted_deposit(icp_mint_block_index, deposit.clone());
+            state.record_minted_deposit(icp_mint_block_index, sol_sig, deposit.clone());
         }
     }
 }

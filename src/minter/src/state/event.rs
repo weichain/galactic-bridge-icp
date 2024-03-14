@@ -1,6 +1,6 @@
 use crate::lifecycle::{InitArg, UpgradeArg};
 use crate::state::{
-    DepositEvent, InvalidSolTransaction, SkippedSolSignatureRange, SkippedSolTransaction,
+    Deposit, InvalidSolTransaction, SkippedSolSignatureRange, SkippedSolTransaction,
 };
 
 use minicbor::{Decode, Encode};
@@ -53,8 +53,7 @@ pub enum EventType {
     AcceptedDeposit {
         /// The accepted deposit.
         #[n(0)]
-        deposit: DepositEvent,
-        /// The signature of the deposit transaction in solana.
+        deposit: Deposit,
         #[n(1)]
         sol_sig: String,
     },
@@ -62,9 +61,11 @@ pub enum EventType {
     MintedDeposit {
         /// The minted ckETH event.
         #[n(0)]
-        deposit: DepositEvent,
-        /// The mint block index.
+        deposit: Deposit,
         #[n(1)]
+        sol_sig: String,
+        /// The mint block index.
+        #[n(2)]
         // TODO: is u64 enough?
         icp_mint_block_index: u64,
     },
