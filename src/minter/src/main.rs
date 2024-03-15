@@ -1,5 +1,5 @@
-use minter::constants::SCRAPPING_ETH_LOGS_INTERVAL;
-use minter::deposit::scrap_solana_logs;
+use minter::constants::SCRAPPING_SOLANA_SIGNATURE_RANGE;
+use minter::deposit::{get_latest_signature, scrap_signature_range};
 use minter::lifecycle::{post_upgrade as lifecycle_post_upgrade, MinterArg};
 use minter::logs::INFO;
 use minter::state::event::EventType;
@@ -22,22 +22,20 @@ use std::time::Duration;
 
 fn setup_timers() {
     ic_cdk_timers::set_timer(Duration::from_secs(0), || {
-        // Initialize the minter's public key to make the address known.
         ic_cdk::spawn(async {
-            lazy_call_ecdsa_public_key().await;
-        })
+            let _ = lazy_call_ecdsa_public_key().await;
+        });
+    });
+    ic_cdk_timers::set_timer(Duration::from_secs(0), || {
+        ic_cdk::spawn(async {
+            let _ = get_latest_signature().await;
+        });
     });
 
     // Start scraping logs immediately after the install, then repeat with the interval.
-    ic_cdk_timers::set_timer(
-        Duration::from_secs(0),
-        || ic_cdk::spawn(scrap_solana_logs()),
-    );
-    ic_cdk_timers::set_timer_interval(SCRAPPING_ETH_LOGS_INTERVAL, || {
-        ic_cdk::spawn(scrap_solana_logs())
+    ic_cdk_timers::set_timer(SCRAPPING_SOLANA_SIGNATURE_RANGE, || {
+        ic_cdk::spawn(async { scrap_signature_range().await });
     });
-
-    // TODO: maybe need to trigger retry on some interval
 }
 
 #[candid_method(init)]
@@ -66,9 +64,9 @@ pub fn init(args: MinterArg) {
 #[pre_upgrade]
 fn pre_upgrade() {
     read_state(|s| {
-        storage::record_event(EventType::SyncedToSignature {
-            signature: s.get_last_scraped_transaction(),
-        });
+        storage::record_event(EventType::LastKnownSolanaSignature(
+            s.get_solana_last_known_signature(),
+        ));
     });
 }
 

@@ -11,7 +11,7 @@ pub struct InitArg {
     #[n(1)]
     pub solana_contract_address: String,
     #[n(2)]
-    pub solana_initial_transaction: String,
+    pub solana_initial_signature: String,
     #[n(3)]
     pub ecdsa_key_name: String,
     #[cbor(n(4), with = "crate::cbor::principal")]
@@ -26,7 +26,7 @@ impl TryFrom<InitArg> for State {
         InitArg {
             solana_network,
             solana_contract_address,
-            solana_initial_transaction,
+            solana_initial_signature,
             ecdsa_key_name,
             ledger_id,
             minimum_withdrawal_amount,
@@ -44,7 +44,7 @@ impl TryFrom<InitArg> for State {
             // solana related config
             solana_network,
             solana_contract_address,
-            solana_initial_transaction,
+            solana_initial_signature,
 
             // icp related config
             ecdsa_key_name,
@@ -53,15 +53,14 @@ impl TryFrom<InitArg> for State {
             minimum_withdrawal_amount,
 
             // scrapper config
-            last_scraped_transaction: None,
+            solana_last_known_signature: None,
 
-            // failed calls
-            skipped_signature_ranges: Default::default(),
-            skipped_transactions: Default::default(),
+            solana_signature_ranges: Default::default(),
+            solana_signatures: Default::default(),
 
             // invalid transactions - cannot be parsed, does not hold deposit event, blocked user, etc.
-            invalid_transactions: Default::default(),
-            // valid transaction events that have been minted
+            invalid_events: Default::default(),
+            // valid transaction events
             accepted_events: Default::default(),
             // minted events
             minted_events: Default::default(),

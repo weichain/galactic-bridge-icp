@@ -11,31 +11,50 @@ pub fn apply_state_transition(state: &mut State, payload: &EventType) {
             panic!("state re-initialization is not allowed: {init_arg:?}");
         }
         EventType::Upgrade(upgrade_arg) => {
-            // TODO: when upgrade is done, handle errors
+            // TODO:
             state.upgrade(upgrade_arg.clone())
             // .expect("applying upgrade event should succeed");
         }
-        EventType::SyncedToSignature { signature } => {
-            state.record_last_scraped_transaction(signature);
+        EventType::LastKnownSolanaSignature(signature) => {
+            state.record_solana_last_known_signature(signature);
         }
-        EventType::SkippedSolSignatureRange { range, reason } => {
-            state.record_skipped_signature_range(range.clone());
+        EventType::NewSolanaSignatureRange(range) => {
+            state.record_solana_signature_range(range.clone());
         }
-        EventType::SkippedSolTransaction { sol_tx, reason } => {
-            state.record_skipped_transaction(sol_tx.clone());
+        EventType::RemoveSolanaSignatureRange(range) => {
+            state.remove_solana_signature_range(range);
         }
-        EventType::InvalidDeposit { sol_tx, reason } => {
-            state.record_invalid_transaction(sol_tx.clone());
+        EventType::RetrySolanaSignatureRange {
+            range,
+            failed_sub_range,
+            fail_reason,
+        } => {
+            state.retry_solana_signature_range(range.clone(), failed_sub_range.clone());
         }
-        EventType::AcceptedDeposit { deposit, sol_sig } => {
-            state.record_accepted_deposit(sol_sig, deposit.clone());
+        EventType::SolanaSignature {
+            signature,
+            fail_reason,
+        } => {
+            state.record_solana_signature(signature.clone());
         }
-        EventType::MintedDeposit {
-            deposit,
-            sol_sig,
+        EventType::InvalidEvent {
+            signature,
+            fail_reason,
+        } => {
+            state.record_invalid_event(signature.clone());
+        }
+        EventType::AcceptedEvent {
+            event_source,
+            signature,
+        } => {
+            state.record_accepted_event(event_source.clone(), signature);
+        }
+        EventType::MintedEvent {
+            event_source,
+            signature,
             icp_mint_block_index,
         } => {
-            state.record_minted_deposit(icp_mint_block_index, sol_sig, deposit.clone());
+            state.record_minted_deposit(event_source.clone(), signature, icp_mint_block_index);
         }
     }
 }

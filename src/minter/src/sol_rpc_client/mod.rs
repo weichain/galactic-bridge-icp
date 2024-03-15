@@ -119,6 +119,8 @@ impl SolRpcClient {
         }
     }
 
+    // Method relies on the getSignaturesForAddress RPC call to get the signatures for the address:
+    // https://solana.com/docs/rpc/http/getsignaturesforaddress
     pub async fn get_signatures_for_address(
         &self,
         limit: u64,
@@ -177,6 +179,8 @@ impl SolRpcClient {
         }
     }
 
+    // Method relies on the gettransaction RPC call to get the transaction data:
+    // https://solana.com/docs/rpc/http/gettransaction
     pub async fn get_transactions(
         &self,
         signatures: Vec<&String>,

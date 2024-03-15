@@ -1,7 +1,5 @@
 use crate::lifecycle::{InitArg, UpgradeArg};
-use crate::state::{
-    Deposit, InvalidSolTransaction, SkippedSolSignatureRange, SkippedSolTransaction,
-};
+use crate::state::{Deposit, SolanaSignature, SolanaSignatureRange};
 
 use minicbor::{Decode, Encode};
 
@@ -15,55 +13,59 @@ pub enum EventType {
     /// The minter upgraded with the specified arguments.
     #[n(1)]
     Upgrade(#[n(0)] UpgradeArg),
-    /// The minter synced to the specified signature.
+    /// Last known signature by the minter.
     #[n(2)]
-    SyncedToSignature {
-        /// The last processed signature (inclusive).
-        #[n(0)]
-        signature: String,
-    },
+    LastKnownSolanaSignature(#[n(0)] String),
+    /// New signature range in solana.
     #[n(3)]
-    SkippedSolSignatureRange {
-        /// The skipped signature range in solana.
-        #[n(0)]
-        range: SkippedSolSignatureRange,
-        /// The reason for skipping the range.
-        #[n(1)]
-        reason: String,
-    },
+    NewSolanaSignatureRange(#[n(0)] SolanaSignatureRange),
     #[n(4)]
-    SkippedSolTransaction {
-        /// The skipped transaction.
-        #[n(0)]
-        sol_tx: SkippedSolTransaction,
-        /// The reason for skipping the transaction in solana.
-        #[n(1)]
-        reason: String,
-    },
+    RemoveSolanaSignatureRange(#[n(0)] SolanaSignatureRange),
     #[n(5)]
-    InvalidDeposit {
-        /// The invalid transaction.
+    RetrySolanaSignatureRange {
+        /// The previously failed range.
         #[n(0)]
-        sol_tx: InvalidSolTransaction,
-        /// The reason for invalidating the transaction in solana.
+        range: SolanaSignatureRange,
+        /// A failed sub-range of the previously failed range.
         #[n(1)]
-        reason: String,
+        failed_sub_range: Option<SolanaSignatureRange>,
+        /// The reason for failure.
+        #[n(2)]
+        fail_reason: String,
     },
     #[n(6)]
-    AcceptedDeposit {
-        /// The accepted deposit.
+    SolanaSignature {
+        /// The skipped transaction.
         #[n(0)]
-        deposit: Deposit,
+        signature: SolanaSignature,
+        /// The reason for skipping the transaction in solana.
         #[n(1)]
-        sol_sig: String,
+        fail_reason: Option<String>,
     },
     #[n(7)]
-    MintedDeposit {
+    InvalidEvent {
+        /// The invalid transaction.
+        #[n(0)]
+        signature: SolanaSignature,
+        /// The reason for invalidating the transaction in solana.
+        #[n(1)]
+        fail_reason: String,
+    },
+    #[n(8)]
+    AcceptedEvent {
+        /// The accepted deposit.
+        #[n(0)]
+        event_source: Deposit,
+        #[n(1)]
+        signature: SolanaSignature,
+    },
+    #[n(9)]
+    MintedEvent {
         /// The minted ckETH event.
         #[n(0)]
-        deposit: Deposit,
+        event_source: Deposit,
         #[n(1)]
-        sol_sig: String,
+        signature: SolanaSignature,
         /// The mint block index.
         #[n(2)]
         // TODO: is u64 enough?

@@ -1139,6 +1139,7 @@ dependencies = [
  "ic-cdk-macros",
  "ic-cdk-timers",
  "ic-crypto-ecdsa-secp256k1",
+ "ic-stable-structures",
  "icrc-ledger-client-cdk",
  "icrc-ledger-types",
  "k256 0.12.0",

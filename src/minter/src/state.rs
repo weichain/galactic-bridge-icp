@@ -1,7 +1,5 @@
 use crate::constants::DERIVATION_PATH;
-use crate::events::{
-    Deposit, InvalidSolTransaction, Retriable, SkippedSolSignatureRange, SkippedSolTransaction,
-};
+use crate::events::{Deposit, Retriable, SolanaSignature, SolanaSignatureRange};
 use crate::lifecycle::{SolanaNetwork, UpgradeArg};
 use crate::logs::DEBUG;
 
@@ -28,16 +26,14 @@ pub enum InvalidStateError {
     InvalidLedgerId(String),
     InvalidSolanaContractAddress(String),
     InvalidMinimumWithdrawalAmount(String),
-    InvalidInitialTransaction(String),
+    InvalidSolanaInitialSignature(String),
 }
 
 #[derive(Debug, Hash, Copy, Clone, PartialEq, Eq, EnumIter)]
 pub enum TaskType {
-    MintCkSol,
-    RetrieveSol,
-    ScrapSolLogs,
-    // TODO: what is Reimbursement and RetrieveSol
-    Reimbursement,
+    GetLatestSignature,
+    ScrapSignatureRanges,
+    ScrapSignatures,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -45,7 +41,7 @@ pub struct State {
     // solana config
     pub solana_network: SolanaNetwork,
     pub solana_contract_address: String,
-    pub solana_initial_transaction: String,
+    pub solana_initial_signature: String,
 
     // icp config
     pub ecdsa_key_name: String,
@@ -55,18 +51,17 @@ pub struct State {
     pub minimum_withdrawal_amount: BigUint,
 
     // internals
-    pub last_scraped_transaction: Option<String>,
+    pub solana_last_known_signature: Option<String>,
 
-    pub skipped_signature_ranges: HashMap<String, SkippedSolSignatureRange>,
-    pub skipped_transactions: HashMap<String, SkippedSolTransaction>,
-    pub invalid_transactions: HashMap<String, InvalidSolTransaction>,
+    pub solana_signature_ranges: HashMap<String, SolanaSignatureRange>,
+    pub solana_signatures: HashMap<String, SolanaSignature>,
+
+    pub invalid_events: HashMap<String, SolanaSignature>,
     pub accepted_events: HashMap<String, Deposit>,
-    // TODO: is 64 enough for block index
     pub minted_events: HashMap<u64, Deposit>,
 
     /// Number of HTTP outcalls since the last upgrade.
     /// Used to correlate request and response in logs.
-    /// TODO:
     pub http_request_counter: u64,
 
     /// Locks preventing concurrent execution timer tasks
@@ -90,9 +85,9 @@ impl State {
                 "solana_contract_address cannot be empty".to_string(),
             ));
         }
-        if self.solana_initial_transaction.trim().is_empty() {
-            return Err(InvalidStateError::InvalidInitialTransaction(
-                "solana_initial_transaction cannot be empty".to_string(),
+        if self.solana_initial_signature.trim().is_empty() {
+            return Err(InvalidStateError::InvalidSolanaInitialSignature(
+                "solana_initial_signature cannot be empty".to_string(),
             ));
         }
         if self.minimum_withdrawal_amount == BigUint::from(0u8) {
@@ -136,135 +131,130 @@ impl State {
         self.solana_network
     }
 
-    pub fn record_last_scraped_transaction(&mut self, tx: &String) {
-        self.last_scraped_transaction = Some(tx.to_string());
+    pub fn record_solana_last_known_signature(&mut self, sig: &String) {
+        self.solana_last_known_signature = Some(sig.to_string());
     }
 
-    pub fn get_last_scraped_transaction(&self) -> String {
-        if let Some(tx) = &self.last_scraped_transaction {
-            tx.to_string()
+    pub fn get_solana_last_known_signature(&self) -> String {
+        if let Some(sig) = &self.solana_last_known_signature {
+            sig.to_string()
         } else {
-            self.solana_initial_transaction.to_string()
+            self.solana_initial_signature.to_string()
         }
     }
 
-    // TODO: update record methods
-    pub fn record_skipped_signature_range(&mut self, range: SkippedSolSignatureRange) {
-        let key = range_key(&range.before_sol_signature, &range.until_sol_signature);
+    pub fn record_solana_signature_range(&mut self, range: SolanaSignatureRange) {
+        let key = range_key(&range.before_sol_sig, &range.until_sol_sig);
 
         assert!(
-            self.skipped_signature_ranges.contains_key(&key),
-            "attempted to record existing range as skipped: {key}"
+            self.solana_signature_ranges.contains_key(&key),
+            "Attempted to record existing range: {key} ."
         );
 
-        _ = self.skipped_signature_ranges.insert(key, range);
+        _ = self.solana_signature_ranges.insert(key, range);
     }
 
-    /// This method is used to record a skipped signature range after a retry.
-    /// In case the range failed again - increment retry counter
-    /// In case sub range of the previously failed range failed - remove the old range and add the new range
-    pub fn record_skipped_signature_range_after_retry(
+    pub fn retry_solana_signature_range(
         &mut self,
-        old_range: SkippedSolSignatureRange,
-        new_range: Option<SkippedSolSignatureRange>,
+        old_range: SolanaSignatureRange,
+        new_range: Option<SolanaSignatureRange>,
     ) {
-        let old_key = range_key(
-            &old_range.before_sol_signature,
-            &old_range.until_sol_signature,
-        );
+        let old_key = range_key(&old_range.before_sol_sig, &old_range.until_sol_sig);
 
         assert!(
-            !self.skipped_signature_ranges.contains_key(&old_key),
-            "attempted to RErecord non existing range as skipped on retry: {old_key}"
+            !self.solana_signature_ranges.contains_key(&old_key),
+            "Attempted to re-record NON existing range: {old_key} ."
         );
 
-        if let Some(mut existing_range) = self.skipped_signature_ranges.remove(&old_key) {
+        if let Some(mut existing_range) = self.solana_signature_ranges.remove(&old_key) {
             // if a sub range of previously failed range failed, remove the old range and add the new range
             if let Some(new_range) = new_range {
-                self.record_skipped_signature_range(new_range);
+                self.record_solana_signature_range(new_range);
             } else {
                 // in case range exists, increment the retries
                 existing_range.increment_retries();
-                self.skipped_signature_ranges
+                self.solana_signature_ranges
                     .insert(old_key.to_string(), existing_range);
             }
         }
     }
 
-    pub fn remove_skipped_signature_range(&mut self, range: SkippedSolSignatureRange) {
-        let key = range_key(&range.before_sol_signature, &range.until_sol_signature);
+    pub fn remove_solana_signature_range(&mut self, range: &SolanaSignatureRange) {
+        let key = range_key(&range.before_sol_sig, &range.until_sol_sig);
 
         assert!(
-            !self.skipped_signature_ranges.contains_key(&key),
-            "attempted to remove non existing range: {key}"
+            !self.solana_signature_ranges.contains_key(&key),
+            "Attempted to remove NON existing range: {key} ."
         );
 
-        _ = self.skipped_signature_ranges.remove(&key);
+        _ = self.solana_signature_ranges.remove(&key);
     }
 
-    pub fn record_skipped_transaction(&mut self, tx: SkippedSolTransaction) {
-        if self.skipped_transactions.contains_key(&tx.sol_signature) {
+    pub fn record_solana_signature(&mut self, sig: SolanaSignature) {
+        if self.solana_signatures.contains_key(&sig.sol_sig) {
             // if it exists - increment the retries
-            let mut existing_tx = self.skipped_transactions.remove(&tx.sol_signature).unwrap();
+            let mut existing_signature = self.solana_signatures.remove(&sig.sol_sig).unwrap();
 
-            existing_tx.increment_retries();
+            existing_signature.increment_retries();
             _ = self
-                .skipped_transactions
-                .insert(tx.sol_signature.to_string(), existing_tx);
+                .solana_signatures
+                .insert(sig.sol_sig.to_string(), existing_signature);
         } else {
-            // if it doesn't exist - add it
-            _ = self
-                .skipped_transactions
-                .insert(tx.sol_signature.to_string(), tx);
+            // if it does not exist - add it
+            _ = self.solana_signatures.insert(sig.sol_sig.to_string(), sig);
         }
     }
 
-    pub fn record_invalid_transaction(&mut self, tx: InvalidSolTransaction) {
-        let key = &tx.sol_signature;
+    pub fn record_invalid_event(&mut self, sig: SolanaSignature) {
+        let key = &sig.sol_sig;
+
         assert!(
-            self.invalid_transactions.contains_key(key),
-            "attempted to record existing invalid transaction: {key}"
+            !self.solana_signatures.contains_key(key),
+            "Attempted to remove NON existing solana signature: {key} ."
+        );
+        assert!(
+            self.invalid_events.contains_key(key),
+            "Attempted to record existing invalid event: {key}."
         );
 
-        // remove it only if it is part of skipped transactions
-        _ = self.skipped_transactions.remove(key);
-
-        _ = self.invalid_transactions.insert(key.to_string(), tx);
+        _ = self.solana_signatures.remove(key);
+        _ = self.invalid_events.insert(key.to_string(), sig);
     }
 
-    pub fn record_accepted_deposit(&mut self, sol_transaction: &String, deposit: Deposit) {
-        let key = sol_transaction;
+    pub fn record_accepted_event(&mut self, deposit: Deposit, sig: &SolanaSignature) {
+        let key = &sig.sol_sig;
 
         assert!(
+            !self.solana_signatures.contains_key(key),
+            "Attempted to remove NON existing solana signature: {key} ."
+        );
+        assert!(
             self.accepted_events.contains_key(key),
-            "attempted to record existing accepted deposit: {key}"
+            "Attempted to record existing accepted event: {key} ."
         );
 
-        // remove it only if it is part of skipped transactions
-        _ = self.skipped_transactions.remove(key);
-
-        _ = self
-            .accepted_events
-            .insert(format!("{}", sol_transaction), deposit);
+        _ = self.solana_signatures.remove(key);
+        _ = self.accepted_events.insert(key.to_string(), deposit);
     }
 
     pub fn record_minted_deposit(
         &mut self,
-        icp_mint_block_index: &u64,
-        sol_transaction: &String,
         deposit: Deposit,
+        sig: &SolanaSignature,
+        icp_mint_block_index: &u64,
     ) {
+        let key = &sig.sol_sig;
+
         assert!(
-            !self.accepted_events.contains_key(sol_transaction),
-            "attempted to record NON existing accepted deposit: {sol_transaction}"
+            !self.accepted_events.contains_key(key),
+            "Attempted to remove NON existing accepted event: {key} ."
         );
         assert!(
             self.minted_events.contains_key(icp_mint_block_index),
-            "attempted to record existing accepted deposit: {icp_mint_block_index}"
+            "Attempted to record existing accepted deposit: {icp_mint_block_index}."
         );
 
-        _ = self.accepted_events.remove(sol_transaction);
-
+        _ = self.accepted_events.remove(key);
         _ = self.minted_events.insert(*icp_mint_block_index, deposit);
     }
 }

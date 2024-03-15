@@ -15,4 +15,4 @@ use serde_bytes::ByteBuf;
 // vec![1],
 pub const DERIVATION_PATH: Vec<ByteBuf> = vec![];
 
-pub const SCRAPPING_ETH_LOGS_INTERVAL: Duration = Duration::from_secs(3 * 60);
+pub const SCRAPPING_SOLANA_SIGNATURE_RANGE: Duration = Duration::from_secs(3 * 60);

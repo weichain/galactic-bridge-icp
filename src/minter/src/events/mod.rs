@@ -6,27 +6,27 @@ pub trait Retriable {
 }
 
 #[derive(Debug, Encode, Decode, PartialEq, Clone, Eq)]
-pub struct SkippedSolSignatureRange {
+pub struct SolanaSignatureRange {
     #[n(0)]
-    pub before_sol_signature: String,
+    pub before_sol_sig: String,
     #[n(1)]
-    pub until_sol_signature: String,
+    pub until_sol_sig: String,
     #[n(2)]
     retries: u8,
 }
 
-impl SkippedSolSignatureRange {
-    // Constructor function to create a new SkippedSolSignatureRange
+impl SolanaSignatureRange {
+    // Constructor function to create a new SolanaSignatureRange
     pub fn new(before: String, until: String) -> Self {
-        SkippedSolSignatureRange {
-            before_sol_signature: before,
-            until_sol_signature: until,
+        SolanaSignatureRange {
+            before_sol_sig: before,
+            until_sol_sig: until,
             retries: 0,
         }
     }
 }
 
-impl Retriable for SkippedSolSignatureRange {
+impl Retriable for SolanaSignatureRange {
     fn get_retries(&self) -> u8 {
         self.retries
     }
@@ -37,45 +37,30 @@ impl Retriable for SkippedSolSignatureRange {
 }
 
 #[derive(Debug, Encode, Decode, PartialEq, Clone, Eq)]
-pub struct SkippedSolTransaction {
+pub struct SolanaSignature {
     #[n(0)]
-    pub sol_signature: String,
+    pub sol_sig: String,
     #[n(1)]
     retries: u8,
 }
 
-impl SkippedSolTransaction {
-    // Constructor function to create a new SkippedSolTransaction
+impl SolanaSignature {
+    // Constructor function to create a new SolanaSignature
     pub fn new(signature: String) -> Self {
-        SkippedSolTransaction {
-            sol_signature: signature,
+        SolanaSignature {
+            sol_sig: signature,
             retries: 0,
         }
     }
 }
 
-impl Retriable for SkippedSolTransaction {
+impl Retriable for SolanaSignature {
     fn get_retries(&self) -> u8 {
         self.retries
     }
 
     fn increment_retries(&mut self) {
         self.retries += 1;
-    }
-}
-
-#[derive(Debug, Encode, Decode, PartialEq, Clone, Eq)]
-pub struct InvalidSolTransaction {
-    #[n(0)]
-    pub sol_signature: String,
-}
-
-impl InvalidSolTransaction {
-    // Constructor function to create a new InvalidSolTransaction
-    pub fn new(signature: String) -> Self {
-        InvalidSolTransaction {
-            sol_signature: signature,
-        }
     }
 }
 
@@ -106,12 +91,4 @@ impl From<&str> for Deposit {
             amount,
         }
     }
-}
-
-#[derive(Debug, Encode, Decode, PartialEq, Clone, Eq)]
-pub struct DepositEvent {
-    #[n(0)]
-    pub deposit: Deposit,
-    #[n(1)]
-    pub sol_signature: String,
 }

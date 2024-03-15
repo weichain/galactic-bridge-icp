@@ -1,269 +1,338 @@
-use crate::events::{
-    Deposit, DepositEvent, InvalidSolTransaction, SkippedSolSignatureRange, SkippedSolTransaction,
-};
+use crate::events::{Deposit, SolanaSignature, SolanaSignatureRange};
 use crate::guard::TimerGuard;
 use crate::logs::DEBUG;
-use crate::sol_rpc_client::responses::{GetTransactionResponse, SignatureResponse};
+use crate::sol_rpc_client::responses::GetTransactionResponse;
 use crate::sol_rpc_client::SolRpcClient;
 use crate::state::audit::process_event;
 use crate::state::event::EventType;
 use crate::state::{mutate_state, read_state, TaskType};
 
+use std::collections::HashMap;
+use std::ops::Deref;
+
 const GET_SIGNATURES_BY_ADDRESS_LIMIT: u64 = 10;
 const GET_TRANSACTIONS_LIMIT: u64 = 5;
 
-pub async fn scrap_solana_logs() {
-    let _guard = match TimerGuard::new(TaskType::ScrapSolLogs) {
+// fetch newest signature and push a new range to the state
+pub async fn get_latest_signature() {
+    let _guard = match TimerGuard::new(TaskType::GetLatestSignature) {
+        Ok(guard) => guard,
+        Err(_) => return,
+    };
+
+    ic_canister_log::log!(DEBUG, "Searching for new signatures ...");
+
+    let until_signature = read_state(|s| s.get_solana_last_known_signature());
+
+    // RPC call underneath is exclusive, so until_signature is not included in the result
+    match read_state(SolRpcClient::from_state)
+        .get_signatures_for_address(1, None, &until_signature)
+        .await
+    {
+        Ok(signatures) => match signatures.len() {
+            0 => ic_canister_log::log!(DEBUG, "No new signatures found."),
+            1 => {
+                let newest_sig = signatures[0].signature.to_string();
+                process_new_solana_signature_range(&newest_sig, &until_signature);
+            }
+            _ => {
+                ic_canister_log::log!(DEBUG, "Unexpected behaviour.",);
+            }
+        },
+        Err(error) => {
+            ic_canister_log::log!(
+                DEBUG,
+                "Failed to get signatures for address. Error: {error:?}."
+            );
+        }
+    }
+}
+
+pub async fn scrap_signature_range() {
+    let _guard = match TimerGuard::new(TaskType::ScrapSignatureRanges) {
         Ok(guard) => guard,
         Err(_) => return,
     };
 
     let rpc_client = read_state(SolRpcClient::from_state);
-    let until_signature = read_state(|s| s.get_last_scraped_transaction());
+    let ranges_map = read_state(|s| s.solana_signature_ranges.clone());
 
-    let signatures =
-        scrap_signature_range_with_limit(&rpc_client, None, &until_signature, None).await;
-
-    let transactions =
-        scrap_transactions_with_limit(&rpc_client, signatures.iter().collect(), None).await;
-
-    transactions.last().map(|tx| {
-        mutate_state(|s| {
-            process_event(
-                s,
-                EventType::SyncedToSignature {
-                    signature: tx.transaction.signatures[0].to_string(),
-                },
-            )
-        })
-    });
-
-    parse_log_messages(transactions.iter().collect()).await;
+    for (_, v) in &ranges_map {
+        process_signature_range_with_limit(&rpc_client, v.clone(), None).await;
+    }
 }
 
-// Method relies on the getSignaturesForAddress RPC call to get the signatures for the address:
-// https://solana.com/docs/rpc/http/getsignaturesforaddress
-//
-// The method is called with a limit, which is the maximum number of signatures to be returned on a single call:
-// On first call:
-// before_signature is unknown -> If not provided the search starts from the top of the highest max confirmed block
-// until_signature is the last scraped transaction
-//
-// On subsequent calls:
-// before_signature is the last signature from the previous call
-// until_signature is the last scraped transaction
-//
-// If first call fails range is not marked as skipped (it will be covered on next calls).
-// But in case subsequent call fails (it means gap appears in the data) scrap process stops and the failed
-// range is marked as skipped (for later retry)!
-async fn scrap_signature_range_with_limit(
+async fn process_signature_range_with_limit(
     rpc_client: &SolRpcClient,
-    mut before_signature: Option<String>,
-    until_signature: &String,
+    range: SolanaSignatureRange,
     limit: Option<u64>,
-) -> Vec<String> {
+) {
     let limit = limit.unwrap_or(GET_SIGNATURES_BY_ADDRESS_LIMIT);
-    let mut signatures_result: Vec<SignatureResponse> = Vec::new();
-
-    fn transform_signature_response(response: &Vec<SignatureResponse>) -> Vec<String> {
-        response.iter().map(|r| r.signature.to_string()).collect()
-    }
+    let mut before_signature = range.before_sol_sig.to_string();
+    let until_signature = range.until_sol_sig.to_string();
 
     loop {
         ic_canister_log::log!(
             DEBUG,
-            "Getting signatures for address: limit: {limit}, before: {before_signature:?}, until: {until_signature}.",
+            "Scanning range: before: {before_signature}, until: {until_signature} with limit: {limit} ...",
         );
 
         // get signatures for chunk
         match rpc_client
-            .get_signatures_for_address(limit, before_signature.as_ref(), until_signature)
+            .get_signatures_for_address(limit, Some(&before_signature), &until_signature)
             .await
         {
             Ok(signatures) => {
                 // if no signatures are available, we are done
                 if signatures.is_empty() {
-                    ic_canister_log::log!(
-                        DEBUG,
-                        "No signatures for address available: limit: {limit}, before: {before_signature:?}, until: {until_signature}.",
-                    );
-
-                    return transform_signature_response(&signatures_result);
+                    remove_solana_signature_range(&range);
+                    break;
                 }
 
                 // if signatures are available, we continue with the next chunk
                 // store the last signature to use it as before for the next chunk
-                let last_signature = signatures.last().unwrap();
-                before_signature = Some(last_signature.signature.to_string());
-                signatures_result.extend(signatures);
-            }
-            Err(error) => {
-                ic_canister_log::log!(DEBUG, "Failed to get signatures for address: {:?}.", error);
 
-                // if rpc request fails to get signatures, cannot continue, skip the range and retry later
-                if let Some(before) = before_signature {
-                    // in case "before_signature" is not None return the skipped range
-
-                    mutate_state(|s| {
-                        process_event(
-                            s,
-                            EventType::SkippedSolSignatureRange {
-                                range: SkippedSolSignatureRange::new(
-                                    before.to_string(),
-                                    until_signature.to_string(),
-                                ),
-                                reason: format!("{:?}", error),
-                            },
-                        )
-                    });
+                // include the first signature, call is not inclusive
+                if before_signature == range.before_sol_sig {
+                    process_solana_signature(
+                        &SolanaSignature::new(before_signature.to_string()),
+                        None,
+                    )
                 }
 
-                // in case rpc request fails on first run ("before_signature" is None), skip the whole range
-                // no need to mark it again, it will be covered on next calls
-                return transform_signature_response(&signatures_result);
+                let last_signature = signatures.last().unwrap();
+                before_signature = last_signature.signature.to_string();
+
+                signatures.iter().for_each(|s| {
+                    process_solana_signature(&SolanaSignature::new(s.signature.to_string()), None)
+                });
             }
-        };
+            Err(error) => {
+                // if RPC call failed to get signatures, retry later
+                process_retry_solana_signature_range(
+                    &range,
+                    &before_signature,
+                    &until_signature,
+                    &format!("{error:?}"),
+                );
+
+                break;
+            }
+        }
     }
 }
 
-async fn scrap_transactions_with_limit(
+pub async fn scrap_signatures() {
+    let _guard = match TimerGuard::new(TaskType::ScrapSignatures) {
+        Ok(guard) => guard,
+        Err(_) => return,
+    };
+
+    let rpc_client = read_state(SolRpcClient::from_state);
+    let signatures_map = &read_state(|s| s.solana_signatures.clone());
+
+    ic_canister_log::log!(DEBUG, " signatures: {:?}", signatures_map.keys());
+
+    let transactions = process_signatures_with_limit(&rpc_client, signatures_map, None).await;
+
+    ic_canister_log::log!(
+        DEBUG,
+        "Parsing transactions {:?} ...",
+        signatures_map.iter().map(|(s, _)| s.to_string())
+    );
+
+    parse_log_messages(&transactions);
+}
+
+async fn process_signatures_with_limit(
     rpc_client: &SolRpcClient,
-    signatures: Vec<&String>,
+    signatures_map: &HashMap<String, SolanaSignature>,
     limit: Option<u64>,
-) -> Vec<GetTransactionResponse> {
+) -> Vec<(SolanaSignature, GetTransactionResponse)> {
     let limit = limit.unwrap_or(GET_TRANSACTIONS_LIMIT);
-    let mut transactions_result: Vec<GetTransactionResponse> = Vec::new();
+    let mut transactions: Vec<(SolanaSignature, GetTransactionResponse)> = Vec::new();
 
+    let signatures: Vec<&SolanaSignature> = signatures_map.values().collect();
     for chunk in signatures.chunks(limit as usize) {
-        match rpc_client.get_transactions(chunk.to_vec()).await {
+        let signatures = chunk.iter().map(|elem| &elem.sol_sig).collect();
+
+        match rpc_client.get_transactions(signatures).await {
             Ok(txs) => {
-                txs.iter().for_each(|(k, v)| {
-                    // if tx call failed
-                    if let Err(error) = v {
-                        ic_canister_log::log!(DEBUG, "Signature: {k} -> Failed with {error:?}.",);
+                for (key, value) in txs {
+                    let signature = signatures_map.get(&key).unwrap().clone();
 
-                        // skip the transaction and retry later
-                        mutate_state(|s| {
-                            process_event(
-                                s,
-                                EventType::SkippedSolTransaction {
-                                    sol_tx: SkippedSolTransaction::new(k.to_string()),
-                                    reason: format!("{:?}", error),
-                                },
-                            )
-                        });
-                    } else {
-                        // if tx call returned a proper object
-                        if let Some(tx) = v.as_ref().unwrap() {
-                            transactions_result.push(tx.clone());
-                        } else {
-                            // if tx call returned None
-                            ic_canister_log::log!(
-                                DEBUG,
-                                "Signature: {k} -> Transaction not found."
-                            );
-
-                            mutate_state(|s| {
-                                process_event(
-                                    s,
-                                    EventType::SkippedSolTransaction {
-                                        sol_tx: SkippedSolTransaction::new(k.to_string()),
-                                        reason: "Transaction not found".to_string(),
-                                    },
-                                )
-                            });
+                    match value {
+                        Err(error) => {
+                            let error_msg = format!("Signature: {key} -> Failed with {error:?}.");
+                            process_solana_signature(&signature, Some(&error_msg));
+                        }
+                        Ok(None) => {
+                            let error_msg = format!("Signature: {key} -> Transaction not found.");
+                            process_solana_signature(&signature, Some(&error_msg));
+                        }
+                        Ok(Some(tx)) => {
+                            transactions.push((signature, tx));
                         }
                     }
-                })
-                // save transactions
+                }
             }
             Err(error) => {
                 // if RPC call failed to get transactions, skip the transactions and retry later
-                ic_canister_log::log!(DEBUG, "Failed to get transactions: {error:?}.");
-
-                mutate_state(|s| {
-                    chunk.iter().for_each(|signature| {
-                        process_event(
-                            s,
-                            EventType::SkippedSolTransaction {
-                                sol_tx: SkippedSolTransaction::new(signature.to_string()),
-                                reason: format!("{error:?}"),
-                            },
-                        )
-                    });
-                });
+                let error_msg = format!("Failed to get transactions: {error:?}.");
+                chunk
+                    .iter()
+                    .for_each(|s| process_solana_signature(s.deref(), Some(&error_msg)));
             }
         };
     }
 
-    return transactions_result;
+    return transactions;
 }
 
-async fn parse_log_messages(transactions: Vec<&GetTransactionResponse>) {
-    // transform to deposit event
-    let deposit_msg = &String::from("Program log: Instruction: Deposit");
+fn parse_log_messages(transactions: &Vec<(SolanaSignature, GetTransactionResponse)>) {
+    for (signature, transaction) in transactions {
+        match process_transaction_logs(&transaction.meta.logMessages) {
+            Ok(deposit) => {
+                process_accepted_event(signature, &deposit);
+            }
+            Err(error) => {
+                process_invalid_event(signature, &error);
+            }
+        };
+    }
+}
+
+fn process_transaction_logs(msgs: &[String]) -> Result<Deposit, String> {
+    let deposit_msg = "Program log: Instruction: Deposit";
     let success_msg = &format!(
         "Program {} success",
-        &read_state(|s| s.solana_contract_address.clone())
+        read_state(|s| s.solana_contract_address.clone())
     );
-    let program_data_msg = &String::from("Program data: ");
+    let program_data_msg = "Program data: ";
 
-    for transaction in transactions {
-        let msgs = &transaction.meta.logMessages;
-        let signature: String = transaction.transaction.signatures[0].to_string();
+    if msgs.contains(&String::from(deposit_msg))
+        && msgs.contains(&String::from(success_msg))
+        && msgs.iter().any(|s| s.starts_with(program_data_msg))
+    {
+        if let Some(program_data) = msgs.iter().find(|s| s.starts_with(program_data_msg)) {
+            let base64_data = program_data.trim_start_matches(program_data_msg);
+            let deposit: Deposit = Deposit::from(base64_data);
 
-        if msgs.contains(deposit_msg)
-            && msgs.contains(success_msg)
-            && msgs.iter().any(|s| s.starts_with(program_data_msg))
-        {
-            if let Some(program_data) = msgs.iter().find(|s| s.starts_with(program_data_msg)) {
-                // Extract the data after "Program data: "
-                let base64_data = program_data.trim_start_matches(program_data_msg);
-                let deposit = Deposit::from(base64_data);
-
-                ic_canister_log::log!(
-                    DEBUG,
-                    "Signature: {signature} -> Deposit transaction found: {deposit:?}.",
-                );
-
-                mutate_state(|s| {
-                    process_event(
-                        s,
-                        EventType::AcceptedDeposit {
-                            deposit: deposit,
-                            sol_sig: signature,
-                        },
-                    )
-                });
-            } else {
-                let error_msg = "Deposit transaction found. Invalid deposit data.".to_string();
-
-                ic_canister_log::log!(DEBUG, "Signature: {signature} -> {error_msg}.");
-
-                mutate_state(|s| {
-                    process_event(
-                        s,
-                        EventType::InvalidDeposit {
-                            sol_tx: InvalidSolTransaction::new(signature),
-                            reason: error_msg,
-                        },
-                    )
-                });
-            }
+            return Ok(deposit);
         } else {
-            let error_msg = "Non Deposit transaction found.".to_string();
-
-            ic_canister_log::log!(DEBUG, "Signature: {signature} -> {error_msg}.");
-
-            mutate_state(|s| {
-                process_event(
-                    s,
-                    EventType::InvalidDeposit {
-                        sol_tx: InvalidSolTransaction::new(signature),
-                        reason: error_msg,
-                    },
-                )
-            });
+            return Err(String::from(
+                "Deposit transaction found. Invalid deposit data.",
+            ));
         }
+    } else {
+        return Err(String::from("Non-Deposit transaction found."));
     }
+}
+
+/// Process events
+fn process_accepted_event(signature: &SolanaSignature, event: &Deposit) {
+    ic_canister_log::log!(
+        DEBUG,
+        "Signature: {} -> Deposit transaction found: {event:?}.",
+        signature.sol_sig
+    );
+    mutate_state(|s| {
+        process_event(
+            s,
+            EventType::AcceptedEvent {
+                event_source: event.clone(),
+                signature: signature.clone(),
+            },
+        )
+    });
+}
+
+fn process_invalid_event(signature: &SolanaSignature, error_msg: &str) {
+    ic_canister_log::log!(DEBUG, "Signature: {} -> {}.", signature.sol_sig, error_msg);
+    mutate_state(|s| {
+        process_event(
+            s,
+            EventType::InvalidEvent {
+                signature: signature.clone(),
+                fail_reason: error_msg.to_string(),
+            },
+        );
+    });
+}
+
+fn process_solana_signature(signature: &SolanaSignature, error_msg: Option<&str>) {
+    if let Some(error_msg) = error_msg {
+        ic_canister_log::log!(DEBUG, "{}", error_msg);
+    } else {
+        ic_canister_log::log!(
+            DEBUG,
+            "Signature: {} -> Transaction found.",
+            signature.sol_sig
+        );
+    }
+
+    mutate_state(|s| {
+        process_event(
+            s,
+            EventType::SolanaSignature {
+                signature: signature.clone(),
+                fail_reason: error_msg.map(|s| s.to_string()),
+            },
+        );
+    });
+}
+
+fn process_new_solana_signature_range(newest_signature: &str, until_signature: &str) {
+    ic_canister_log::log!(DEBUG, "New signature found: {newest_signature:?}.",);
+
+    mutate_state(|s| {
+        process_event(
+            s,
+            EventType::LastKnownSolanaSignature(newest_signature.to_string()),
+        );
+        process_event(
+            s,
+            EventType::NewSolanaSignatureRange(SolanaSignatureRange::new(
+                newest_signature.to_string(),
+                until_signature.to_string(),
+            )),
+        );
+    });
+}
+
+fn process_retry_solana_signature_range(
+    range: &SolanaSignatureRange,
+    before_signature: &str,
+    until_signature: &str,
+    error: &str,
+) {
+    let error_msg = format!("Failed to get signatures for address: before: {before_signature}, until: {until_signature}. Error: {error:?}.");
+    ic_canister_log::log!(DEBUG, "{}", error_msg);
+
+    mutate_state(|s| {
+        process_event(
+            s,
+            EventType::RetrySolanaSignatureRange {
+                range: range.clone(),
+                failed_sub_range: Some(SolanaSignatureRange::new(
+                    before_signature.to_string(),
+                    until_signature.to_string(),
+                )),
+                fail_reason: error_msg.to_string(),
+            },
+        )
+    });
+}
+
+fn remove_solana_signature_range(range: &SolanaSignatureRange) {
+    ic_canister_log::log!(
+        DEBUG,
+        "Range completed: before: {}, until: {}.",
+        range.before_sol_sig,
+        range.until_sol_sig,
+    );
+
+    mutate_state(|s| {
+        process_event(s, EventType::RemoveSolanaSignatureRange(range.clone()));
+    });
 }
