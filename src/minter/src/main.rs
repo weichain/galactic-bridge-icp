@@ -2,7 +2,7 @@ use minter::constants::{
     GET_LATEST_SOLANA_SIGNATURE, MINT_CKSOL, SCRAPPING_SOLANA_SIGNATURES,
     SCRAPPING_SOLANA_SIGNATURE_RANGES,
 };
-use minter::deposit::{get_latest_signature, scrap_signature_range, scrap_signatures};
+use minter::deposit::{get_latest_signature, mint_cksol, scrap_signature_range, scrap_signatures};
 use minter::lifecycle::{post_upgrade as lifecycle_post_upgrade, MinterArg};
 use minter::logs::INFO;
 use minter::state::event::EventType;

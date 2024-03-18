@@ -137,22 +137,23 @@ impl State {
     }
 
     pub fn get_solana_last_known_signature(&self) -> String {
-        if let Some(sig) = &self.solana_last_known_signature {
-            sig.to_string()
-        } else {
-            self.solana_initial_signature.to_string()
+        match &self.solana_last_known_signature {
+            Some(sig) => sig.to_string(),
+            None => self.solana_initial_signature.to_string(),
         }
     }
 
     pub fn record_solana_signature_range(&mut self, range: SolanaSignatureRange) {
         let key = range_key(&range.before_sol_sig, &range.until_sol_sig);
 
-        assert!(
-            self.solana_signature_ranges.contains_key(&key),
-            "Attempted to record existing range: {key} ."
-        );
-
-        _ = self.solana_signature_ranges.insert(key, range);
+        match self.solana_signature_ranges.contains_key(&key) {
+            true => {
+                panic!("Attempted to record existing range: {key} .");
+            }
+            false => {
+                self.solana_signature_ranges.insert(key, range);
+            }
+        }
     }
 
     pub fn retry_solana_signature_range(
@@ -162,33 +163,32 @@ impl State {
     ) {
         let old_key = range_key(&old_range.before_sol_sig, &old_range.until_sol_sig);
 
-        assert!(
-            !self.solana_signature_ranges.contains_key(&old_key),
-            "Attempted to re-record NON existing range: {old_key} ."
-        );
-
-        if let Some(mut existing_range) = self.solana_signature_ranges.remove(&old_key) {
-            // if a sub range of previously failed range failed, remove the old range and add the new range
-            if let Some(new_range) = new_range {
-                self.record_solana_signature_range(new_range);
-            } else {
-                // in case range exists, increment the retries
-                existing_range.increment_retries();
-                self.solana_signature_ranges
-                    .insert(old_key.to_string(), existing_range);
+        match self.solana_signature_ranges.remove(&old_key) {
+            Some(mut old_range) => {
+                match new_range {
+                    // if it is a sub range of previously failed range failed, remove the old range and add the new range
+                    Some(new_range) => {
+                        self.record_solana_signature_range(new_range);
+                    }
+                    None => {
+                        // in case range exists, increment the retries
+                        old_range.increment_retries();
+                        self.solana_signature_ranges
+                            .insert(old_key.to_string(), old_range);
+                    }
+                }
             }
+            None => panic!("Attempted to re-record NON existing range: {old_key} ."),
         }
     }
 
     pub fn remove_solana_signature_range(&mut self, range: &SolanaSignatureRange) {
         let key = range_key(&range.before_sol_sig, &range.until_sol_sig);
 
-        assert!(
-            !self.solana_signature_ranges.contains_key(&key),
-            "Attempted to remove NON existing range: {key} ."
-        );
-
-        _ = self.solana_signature_ranges.remove(&key);
+        match self.solana_signature_ranges.remove(&key) {
+            Some(_) => {}
+            None => panic!("Attempted to remove NON existing range: {key} ."),
+        };
     }
 
     pub fn record_solana_signature(&mut self, sig: SolanaSignature) {
@@ -198,14 +198,12 @@ impl State {
                 let mut existing_signature = self.solana_signatures.remove(&sig.sol_sig).unwrap();
 
                 existing_signature.increment_retries();
-                _ = self
-                    .solana_signatures
+                self.solana_signatures
                     .insert(sig.sol_sig.to_string(), existing_signature);
             }
             false => {
                 // if it does not exist - add it
-
-                _ = self.solana_signatures.insert(sig.sol_sig.to_string(), sig);
+                self.solana_signatures.insert(sig.sol_sig.to_string(), sig);
             }
         }
     }
@@ -213,7 +211,7 @@ impl State {
     pub fn record_invalid_event(&mut self, sig: SolanaSignature) {
         let key = &sig.sol_sig;
 
-        _ = match self.solana_signatures.remove(key) {
+        match self.solana_signatures.remove(key) {
             Some(event) => event,
             None => panic!("Attempted to remove NON existing solana signature {key} ."),
         };
@@ -223,18 +221,18 @@ impl State {
             "Attempted to record existing invalid event: {key} ."
         );
 
-        _ = self.invalid_events.insert(key.to_string(), sig);
+        self.invalid_events.insert(key.to_string(), sig);
     }
 
     pub fn record_accepted_event(&mut self, deposit: ReceivedSolEvent) {
         let key = &deposit.sol_sig;
 
-        _ = match self.solana_signatures.remove(key) {
+        match self.solana_signatures.remove(key) {
             Some(event) => event,
             None => panic!("Attempted to remove NON existing solana signature {key} ."),
         };
 
-        _ = match self.accepted_events.contains_key(key) {
+        match self.accepted_events.contains_key(key) {
             true => {
                 let mut existing_event = self.accepted_events.remove(key).unwrap();
                 existing_event.increment_retries();

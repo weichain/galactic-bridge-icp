@@ -182,7 +182,7 @@ async fn process_signatures_with_limit(
                 let error_msg = format!("Failed to get transactions: {error:?}.");
                 chunk
                     .iter()
-                    .for_each(|s| process_solana_signature(s.deref(), Some(&error_msg)));
+                    .for_each(|s| process_solana_signature(*s, Some(&error_msg)));
             }
         };
     }
