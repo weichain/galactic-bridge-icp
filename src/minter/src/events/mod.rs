@@ -1,4 +1,8 @@
+use candid::Principal;
+use ic_stable_structures::Storable;
+use icrc_ledger_types::icrc1::transfer::Memo;
 use minicbor::{Decode, Encode};
+use serde::Serialize;
 
 pub trait Retriable {
     fn get_retries(&self) -> u8;
@@ -64,31 +68,61 @@ impl Retriable for SolanaSignature {
     }
 }
 
-#[derive(Debug, Encode, Decode, PartialEq, Clone, Eq)]
-pub struct Deposit {
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Encode, Decode, Serialize)]
+pub struct ReceivedSolEvent {
     #[n(0)]
-    pub address_icp: String,
+    pub sol_sig: String,
     #[n(1)]
-    pub amount: u64,
+    pub from_address: String,
+    #[n(2)]
+    pub value: u64,
+    #[cbor(n(3), with = "crate::cbor::principal")]
+    pub to: Principal,
+    #[n(4)]
+    retries: u8,
 }
 
-impl From<&str> for Deposit {
-    fn from(s: &str) -> Self {
+impl Retriable for ReceivedSolEvent {
+    fn get_retries(&self) -> u8 {
+        self.retries
+    }
+
+    fn increment_retries(&mut self) {
+        self.retries += 1;
+    }
+}
+
+impl From<ReceivedSolEvent> for Memo {
+    fn from(event: ReceivedSolEvent) -> Self {
+        let bytes = serde_cbor::ser::to_vec(&event).expect("Failed to serialize ReceivedSolEvent");
+        Memo::from(bytes)
+    }
+}
+
+impl From<(&str, &str, &str)> for ReceivedSolEvent {
+    fn from(data: (&str, &str, &str)) -> Self {
         use base64::prelude::*;
-        let bytes = BASE64_STANDARD.decode(s).unwrap();
+        let (sol_sig, from_address, encode_data) = data;
+
+        let bytes = BASE64_STANDARD.decode(encode_data).unwrap();
 
         let amount_bytes = &bytes[bytes.len() - 8..];
-        let mut amount: u64 = 0;
+        // TODO: maybe convert to BigUint
+        let mut value: u64 = 0;
         for i in 0..8 {
-            amount |= (amount_bytes[i] as u64) << (i * 8);
+            value |= (amount_bytes[i] as u64) << (i * 8);
         }
 
         let address_bytes = &bytes[12..bytes.len() - 8];
-        let address_icp = String::from_utf8_lossy(&address_bytes);
+        // String::from_utf8_lossy(&address_bytes);
+        let principal = Principal::from_bytes(std::borrow::Cow::Borrowed(address_bytes));
 
-        Deposit {
-            address_icp: address_icp.to_string(),
-            amount,
+        ReceivedSolEvent {
+            sol_sig: sol_sig.to_string(),
+            from_address: from_address.to_string(),
+            value,
+            to: principal,
+            retries: 0,
         }
     }
 }

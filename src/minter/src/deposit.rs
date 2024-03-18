@@ -1,4 +1,4 @@
-use crate::events::{Deposit, SolanaSignature, SolanaSignatureRange};
+use crate::events::{ReceivedSolEvent, SolanaSignature, SolanaSignatureRange};
 use crate::guard::TimerGuard;
 use crate::logs::DEBUG;
 use crate::sol_rpc_client::responses::GetTransactionResponse;
@@ -7,6 +7,7 @@ use crate::state::audit::process_event;
 use crate::state::event::EventType;
 use crate::state::{mutate_state, read_state, TaskType};
 
+use num_traits::ToPrimitive;
 use std::collections::HashMap;
 use std::ops::Deref;
 
@@ -191,9 +192,9 @@ async fn process_signatures_with_limit(
 
 fn parse_log_messages(transactions: &Vec<(SolanaSignature, GetTransactionResponse)>) {
     for (signature, transaction) in transactions {
-        match process_transaction_logs(&transaction.meta.logMessages) {
+        match process_transaction_logs(transaction) {
             Ok(deposit) => {
-                process_accepted_event(signature, &deposit);
+                process_accepted_event(&deposit, None);
             }
             Err(error) => {
                 process_invalid_event(signature, &error);
@@ -202,7 +203,9 @@ fn parse_log_messages(transactions: &Vec<(SolanaSignature, GetTransactionRespons
     }
 }
 
-fn process_transaction_logs(msgs: &[String]) -> Result<Deposit, String> {
+fn process_transaction_logs(
+    transaction: &GetTransactionResponse,
+) -> Result<ReceivedSolEvent, String> {
     let deposit_msg = "Program log: Instruction: Deposit";
     let success_msg = &format!(
         "Program {} success",
@@ -210,13 +213,18 @@ fn process_transaction_logs(msgs: &[String]) -> Result<Deposit, String> {
     );
     let program_data_msg = "Program data: ";
 
+    let signature = &transaction.transaction.signatures[0];
+    let solana_address = &transaction.transaction.message.accountKeys[0];
+    let msgs = &transaction.meta.logMessages;
+
     if msgs.contains(&String::from(deposit_msg))
         && msgs.contains(&String::from(success_msg))
         && msgs.iter().any(|s| s.starts_with(program_data_msg))
     {
         if let Some(program_data) = msgs.iter().find(|s| s.starts_with(program_data_msg)) {
             let base64_data = program_data.trim_start_matches(program_data_msg);
-            let deposit: Deposit = Deposit::from(base64_data);
+            let deposit: ReceivedSolEvent =
+                ReceivedSolEvent::from((signature.as_str(), solana_address.as_str(), base64_data));
 
             return Ok(deposit);
         } else {
@@ -229,19 +237,92 @@ fn process_transaction_logs(msgs: &[String]) -> Result<Deposit, String> {
     }
 }
 
+pub async fn mint_cksol() {
+    use icrc_ledger_client_cdk::{CdkRuntime, ICRC1Client};
+    use icrc_ledger_types::icrc1::{account::Account, transfer::TransferArg};
+
+    let _guard = match TimerGuard::new(TaskType::MintCkSol) {
+        Ok(guard) => guard,
+        Err(_) => return,
+    };
+
+    let (ledger_canister_id, events) = read_state(|s| (s.ledger_id, s.accepted_events.clone()));
+    let client = ICRC1Client {
+        runtime: CdkRuntime,
+        ledger_canister_id,
+    };
+
+    for (_, event) in events {
+        match client
+            .transfer(TransferArg {
+                from_subaccount: None,
+                to: Account {
+                    owner: event.to,
+                    subaccount: None,
+                },
+                fee: None,
+                created_at_time: None,
+                memo: Some(event.clone().into()),
+                amount: candid::Nat::from(event.value),
+            })
+            .await
+        {
+            Ok(Ok(block_index)) => {
+                let block_index = block_index.0.to_u64().expect("nat does not fit into u64");
+                process_minted_event(&event, block_index);
+            }
+            Ok(Err(err)) => {
+                let error_msg = &format!("Failed to mint ckSol: {event:?} {err}");
+                process_accepted_event(&event, Some(error_msg));
+            }
+            Err(err) => {
+                let error_msg = &format!(
+                    "Failed to send a message to the ledger ({ledger_canister_id}): {err:?}"
+                );
+                process_accepted_event(&event, Some(error_msg));
+            }
+        };
+    }
+}
+
 /// Process events
-fn process_accepted_event(signature: &SolanaSignature, event: &Deposit) {
+fn process_minted_event(event: &ReceivedSolEvent, block_index: u64) {
     ic_canister_log::log!(
         DEBUG,
-        "Signature: {} -> Deposit transaction found: {event:?}.",
-        signature.sol_sig
+        "Signature: {} -> Minted {} to {} in block {block_index}",
+        event.sol_sig,
+        event.value,
+        event.to,
     );
+
+    mutate_state(|s| {
+        process_event(
+            s,
+            EventType::MintedEvent {
+                event_source: event.clone(),
+                icp_mint_block_index: block_index,
+            },
+        )
+    });
+}
+
+fn process_accepted_event(event: &ReceivedSolEvent, error_msg: Option<&str>) {
+    if let Some(error_msg) = error_msg {
+        ic_canister_log::log!(DEBUG, "Signature: {} -> {}", event.sol_sig, error_msg);
+    } else {
+        ic_canister_log::log!(
+            DEBUG,
+            "Signature: {} -> Deposit transaction found.",
+            event.sol_sig
+        );
+    }
+
     mutate_state(|s| {
         process_event(
             s,
             EventType::AcceptedEvent {
                 event_source: event.clone(),
-                signature: signature.clone(),
+                fail_reason: error_msg.map(|s| s.to_string()),
             },
         )
     });

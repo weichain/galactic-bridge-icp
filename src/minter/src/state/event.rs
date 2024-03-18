@@ -1,9 +1,9 @@
 use crate::lifecycle::{InitArg, UpgradeArg};
-use crate::state::{Deposit, SolanaSignature, SolanaSignatureRange};
+use crate::state::{ReceivedSolEvent, SolanaSignature, SolanaSignatureRange};
 
 use minicbor::{Decode, Encode};
 
-/// The event describing the ckETH minter state transition.
+/// The event describing the ckSol minter state transition.
 #[derive(Clone, Debug, Encode, Decode, PartialEq, Eq)]
 pub enum EventType {
     /// The minter initialization event.
@@ -53,22 +53,19 @@ pub enum EventType {
     },
     #[n(8)]
     AcceptedEvent {
-        /// The accepted deposit.
+        /// The accepted ReceivedSolEvent.
         #[n(0)]
-        event_source: Deposit,
+        event_source: ReceivedSolEvent,
+        /// The reason for failure.
         #[n(1)]
-        signature: SolanaSignature,
+        fail_reason: Option<String>,
     },
     #[n(9)]
     MintedEvent {
-        /// The minted ckETH event.
+        /// The minted ckSol event.
         #[n(0)]
-        event_source: Deposit,
-        #[n(1)]
-        signature: SolanaSignature,
-        /// The mint block index.
+        event_source: ReceivedSolEvent,
         #[n(2)]
-        // TODO: is u64 enough?
         icp_mint_block_index: u64,
     },
 }

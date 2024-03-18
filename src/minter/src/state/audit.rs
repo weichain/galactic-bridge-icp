@@ -45,16 +45,15 @@ pub fn apply_state_transition(state: &mut State, payload: &EventType) {
         }
         EventType::AcceptedEvent {
             event_source,
-            signature,
+            fail_reason,
         } => {
-            state.record_accepted_event(event_source.clone(), signature);
+            state.record_accepted_event(event_source.clone());
         }
         EventType::MintedEvent {
             event_source,
-            signature,
             icp_mint_block_index,
         } => {
-            state.record_minted_deposit(event_source.clone(), signature, icp_mint_block_index);
+            state.record_minted_deposit(event_source.clone(), icp_mint_block_index);
         }
     }
 }

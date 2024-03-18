@@ -1,5 +1,5 @@
 use crate::constants::DERIVATION_PATH;
-use crate::events::{Deposit, Retriable, SolanaSignature, SolanaSignatureRange};
+use crate::events::{ReceivedSolEvent, Retriable, SolanaSignature, SolanaSignatureRange};
 use crate::lifecycle::{SolanaNetwork, UpgradeArg};
 use crate::logs::DEBUG;
 
@@ -34,6 +34,7 @@ pub enum TaskType {
     GetLatestSignature,
     ScrapSignatureRanges,
     ScrapSignatures,
+    MintCkSol,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -57,8 +58,8 @@ pub struct State {
     pub solana_signatures: HashMap<String, SolanaSignature>,
 
     pub invalid_events: HashMap<String, SolanaSignature>,
-    pub accepted_events: HashMap<String, Deposit>,
-    pub minted_events: HashMap<u64, Deposit>,
+    pub accepted_events: HashMap<String, ReceivedSolEvent>,
+    pub minted_events: HashMap<u64, ReceivedSolEvent>,
 
     /// Number of HTTP outcalls since the last upgrade.
     /// Used to correlate request and response in logs.
@@ -191,70 +192,71 @@ impl State {
     }
 
     pub fn record_solana_signature(&mut self, sig: SolanaSignature) {
-        if self.solana_signatures.contains_key(&sig.sol_sig) {
-            // if it exists - increment the retries
-            let mut existing_signature = self.solana_signatures.remove(&sig.sol_sig).unwrap();
+        match self.solana_signatures.contains_key(&sig.sol_sig) {
+            true => {
+                // if it exists - increment the retries
+                let mut existing_signature = self.solana_signatures.remove(&sig.sol_sig).unwrap();
 
-            existing_signature.increment_retries();
-            _ = self
-                .solana_signatures
-                .insert(sig.sol_sig.to_string(), existing_signature);
-        } else {
-            // if it does not exist - add it
-            _ = self.solana_signatures.insert(sig.sol_sig.to_string(), sig);
+                existing_signature.increment_retries();
+                _ = self
+                    .solana_signatures
+                    .insert(sig.sol_sig.to_string(), existing_signature);
+            }
+            false => {
+                // if it does not exist - add it
+
+                _ = self.solana_signatures.insert(sig.sol_sig.to_string(), sig);
+            }
         }
     }
 
     pub fn record_invalid_event(&mut self, sig: SolanaSignature) {
         let key = &sig.sol_sig;
 
-        assert!(
-            !self.solana_signatures.contains_key(key),
-            "Attempted to remove NON existing solana signature: {key} ."
-        );
+        _ = match self.solana_signatures.remove(key) {
+            Some(event) => event,
+            None => panic!("Attempted to remove NON existing solana signature {key} ."),
+        };
+
         assert!(
             self.invalid_events.contains_key(key),
-            "Attempted to record existing invalid event: {key}."
+            "Attempted to record existing invalid event: {key} ."
         );
 
-        _ = self.solana_signatures.remove(key);
         _ = self.invalid_events.insert(key.to_string(), sig);
     }
 
-    pub fn record_accepted_event(&mut self, deposit: Deposit, sig: &SolanaSignature) {
-        let key = &sig.sol_sig;
+    pub fn record_accepted_event(&mut self, deposit: ReceivedSolEvent) {
+        let key = &deposit.sol_sig;
 
-        assert!(
-            !self.solana_signatures.contains_key(key),
-            "Attempted to remove NON existing solana signature: {key} ."
-        );
-        assert!(
-            self.accepted_events.contains_key(key),
-            "Attempted to record existing accepted event: {key} ."
-        );
+        _ = match self.solana_signatures.remove(key) {
+            Some(event) => event,
+            None => panic!("Attempted to remove NON existing solana signature {key} ."),
+        };
 
-        _ = self.solana_signatures.remove(key);
-        _ = self.accepted_events.insert(key.to_string(), deposit);
+        _ = match self.accepted_events.contains_key(key) {
+            true => {
+                let mut existing_event = self.accepted_events.remove(key).unwrap();
+                existing_event.increment_retries();
+                self.accepted_events.insert(key.to_string(), existing_event)
+            }
+            false => self.accepted_events.insert(key.to_string(), deposit),
+        };
     }
 
-    pub fn record_minted_deposit(
-        &mut self,
-        deposit: Deposit,
-        sig: &SolanaSignature,
-        icp_mint_block_index: &u64,
-    ) {
-        let key = &sig.sol_sig;
+    pub fn record_minted_deposit(&mut self, deposit: ReceivedSolEvent, icp_mint_block_index: &u64) {
+        let key = &deposit.sol_sig;
 
-        assert!(
-            !self.accepted_events.contains_key(key),
-            "Attempted to remove NON existing accepted event: {key} ."
-        );
+        _ = match self.accepted_events.remove(key) {
+            Some(event) => event,
+            None => panic!("Attempted to remove NON existing accepted event: {key} ."),
+        };
+
         assert!(
             self.minted_events.contains_key(icp_mint_block_index),
-            "Attempted to record existing accepted deposit: {icp_mint_block_index}."
+            "Attempted to record existing minted deposit: {icp_mint_block_index}."
         );
 
-        _ = self.accepted_events.remove(key);
         _ = self.minted_events.insert(*icp_mint_block_index, deposit);
     }
 }

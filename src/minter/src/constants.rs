@@ -15,4 +15,7 @@ use serde_bytes::ByteBuf;
 // vec![1],
 pub const DERIVATION_PATH: Vec<ByteBuf> = vec![];
 
-pub const SCRAPPING_SOLANA_SIGNATURE_RANGE: Duration = Duration::from_secs(3 * 60);
+pub const GET_LATEST_SOLANA_SIGNATURE: Duration = Duration::from_secs(1 * 60);
+pub const SCRAPPING_SOLANA_SIGNATURE_RANGES: Duration = Duration::from_secs(3 * 60);
+pub const SCRAPPING_SOLANA_SIGNATURES: Duration = Duration::from_secs(3 * 60);
+pub const MINT_CKSOL: Duration = Duration::from_secs(3 * 60);

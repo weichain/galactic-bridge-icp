@@ -1,5 +1,8 @@
-use minter::constants::SCRAPPING_SOLANA_SIGNATURE_RANGE;
-use minter::deposit::{get_latest_signature, scrap_signature_range};
+use minter::constants::{
+    GET_LATEST_SOLANA_SIGNATURE, MINT_CKSOL, SCRAPPING_SOLANA_SIGNATURES,
+    SCRAPPING_SOLANA_SIGNATURE_RANGES,
+};
+use minter::deposit::{get_latest_signature, scrap_signature_range, scrap_signatures};
 use minter::lifecycle::{post_upgrade as lifecycle_post_upgrade, MinterArg};
 use minter::logs::INFO;
 use minter::state::event::EventType;
@@ -26,15 +29,38 @@ fn setup_timers() {
             let _ = lazy_call_ecdsa_public_key().await;
         });
     });
+
+    // Start scraping logs immediately after the install, then repeat each operation with the interval.
     ic_cdk_timers::set_timer(Duration::from_secs(0), || {
         ic_cdk::spawn(async {
-            let _ = get_latest_signature().await;
+            get_latest_signature().await;
+            scrap_signature_range().await;
+            scrap_signatures().await;
         });
     });
 
-    // Start scraping logs immediately after the install, then repeat with the interval.
-    ic_cdk_timers::set_timer(SCRAPPING_SOLANA_SIGNATURE_RANGE, || {
-        ic_cdk::spawn(async { scrap_signature_range().await });
+    ic_cdk_timers::set_timer(GET_LATEST_SOLANA_SIGNATURE, || {
+        ic_cdk::spawn(async {
+            get_latest_signature().await;
+        });
+    });
+
+    ic_cdk_timers::set_timer(SCRAPPING_SOLANA_SIGNATURE_RANGES, || {
+        ic_cdk::spawn(async {
+            scrap_signature_range().await;
+        });
+    });
+
+    ic_cdk_timers::set_timer(SCRAPPING_SOLANA_SIGNATURES, || {
+        ic_cdk::spawn(async {
+            scrap_signatures().await;
+        });
+    });
+
+    ic_cdk_timers::set_timer(MINT_CKSOL, || {
+        ic_cdk::spawn(async {
+            mint_cksol().await;
+        });
     });
 }
 
@@ -47,8 +73,7 @@ pub fn init(args: MinterArg) {
 
             ic_canister_log::log!(INFO, "[init]: initialized minter with arg: {:?}", init_arg);
             STATE.with(|cell| {
-                // TODO: record the event, how events work?
-                // storage::record_event(EventType::Init(init_arg.clone()));
+                storage::record_event(EventType::Init(init_arg.clone()));
                 *cell.borrow_mut() =
                     Some(State::try_from(init_arg).expect("BUG: failed to initialize minter"))
             });
@@ -96,6 +121,11 @@ fn get_state() {
     read_state(|s| ic_cdk::println!("state: {:?}", s));
 }
 
+#[query]
+async fn get_ledger_id() -> String {
+    read_state(|s| s.ledger_id.clone().to_string())
+}
+
 // #[update]
 // pub async fn sign() -> (String, String, String) {
 //     let key_name = read_state(|s| s.ecdsa_key_name.clone());
@@ -123,40 +153,6 @@ fn get_state() {
 
 //     return (serialized_coupon, coupon_hex_string, signature_hex_string);
 // }
-
-#[update]
-async fn mint(user: Principal, amount: Nat) -> Nat {
-    let client = ICRC1Client {
-        runtime: CdkRuntime,
-        ledger_canister_id: read_state(|s| s.ledger_id.clone()),
-    };
-
-    let args = TransferArg {
-        from_subaccount: None,
-        to: user.into(),
-        fee: None,
-        created_at_time: None,
-        memo: None,
-        amount,
-    };
-
-    let block_index: u64 = match client.transfer(args).await {
-        Ok(Ok(block_index)) => block_index
-            .0
-            .to_u64()
-            .expect("block index should fit into u64"),
-        Ok(Err(err)) => {
-            ic_cdk::println!("Failed to mint: {}", err);
-            0
-        }
-        Err(err) => {
-            ic_cdk::println!("Failed to mint: {}", err.1);
-            0
-        }
-    };
-
-    Nat::from(block_index)
-}
 
 #[update]
 async fn burn(amount: Nat) -> Nat {
@@ -252,34 +248,8 @@ async fn y_parity(signature_hex: String, message: String, public_key_hex: String
     )
 }
 
-#[query]
-async fn get_ledger_id() -> String {
-    read_state(|s| s.ledger_id.clone().to_string())
-}
-
 // The fee for the `sign_with_ecdsa` endpoint using the test key.
 const SIGN_WITH_ECDSA_COST_CYCLES: u64 = 10_000_000_000;
-
-// /// Returns the ECDSA public key of this canister at the given derivation path.
-// async fn ecdsa_public_key(key_name: String, derivation_path: Vec<Vec<u8>>) -> Vec<u8> {
-//     // Retrieve the public key of this canister at the given derivation path
-//     // from the ECDSA API.
-//     let res: Result<(ECDSAPublicKeyReply,), _> = call(
-//         Principal::management_canister(),
-//         "ecdsa_public_key",
-//         (ECDSAPublicKey {
-//             canister_id: None,
-//             derivation_path,
-//             key_id: EcdsaKeyId {
-//                 curve: EcdsaCurve::Secp256k1,
-//                 name: key_name,
-//             },
-//         },),
-//     )
-//     .await;
-
-//     res.unwrap().0.public_key
-// }
 
 async fn sign_with_ecdsa(
     key_name: String,
