@@ -64,6 +64,8 @@ impl TryFrom<InitArg> for State {
             accepted_events: Default::default(),
             // minted events
             minted_events: Default::default(),
+            // withdrawal events
+            withdrawal_events: Default::default(),
 
             http_request_counter: 0,
 

@@ -9,7 +9,6 @@ use crate::state::{mutate_state, read_state, TaskType};
 
 use num_traits::ToPrimitive;
 use std::collections::HashMap;
-use std::ops::Deref;
 
 const GET_SIGNATURES_BY_ADDRESS_LIMIT: u64 = 10;
 const GET_TRANSACTIONS_LIMIT: u64 = 5;
@@ -214,8 +213,8 @@ fn process_transaction_logs(
     let program_data_msg = "Program data: ";
 
     let signature = &transaction.transaction.signatures[0];
-    let solana_address = &transaction.transaction.message.accountKeys[0];
-    let msgs = &transaction.meta.logMessages;
+    let solana_address = &transaction.transaction.message.account_keys[0];
+    let msgs = &transaction.meta.log_messages;
 
     if msgs.contains(&String::from(deposit_msg))
         && msgs.contains(&String::from(success_msg))
@@ -252,24 +251,25 @@ pub async fn mint_cksol() {
         ledger_canister_id,
     };
 
-    for (_, event) in events {
+    for (_, mut event) in events {
         match client
             .transfer(TransferArg {
                 from_subaccount: None,
                 to: Account {
-                    owner: event.to,
+                    owner: event.to_icp_address,
                     subaccount: None,
                 },
                 fee: None,
                 created_at_time: None,
                 memo: Some(event.clone().into()),
-                amount: candid::Nat::from(event.value),
+                amount: candid::Nat::from(event.amount),
             })
             .await
         {
             Ok(Ok(block_index)) => {
                 let block_index = block_index.0.to_u64().expect("nat does not fit into u64");
-                process_minted_event(&event, block_index);
+                event.update_mint_block_index(block_index);
+                process_minted_event(&event);
             }
             Ok(Err(err)) => {
                 let error_msg = &format!("Failed to mint ckSol: {event:?} {err}");
@@ -286,13 +286,14 @@ pub async fn mint_cksol() {
 }
 
 /// Process events
-fn process_minted_event(event: &ReceivedSolEvent, block_index: u64) {
+fn process_minted_event(event: &ReceivedSolEvent) {
     ic_canister_log::log!(
         DEBUG,
-        "Signature: {} -> Minted {} to {} in block {block_index}",
+        "Signature: {} -> Minted {} to {} in block {}",
         event.sol_sig,
-        event.value,
-        event.to,
+        event.amount,
+        event.to_icp_address,
+        event.get_mint_block_index().unwrap()
     );
 
     mutate_state(|s| {
@@ -300,7 +301,6 @@ fn process_minted_event(event: &ReceivedSolEvent, block_index: u64) {
             s,
             EventType::MintedEvent {
                 event_source: event.clone(),
-                icp_mint_block_index: block_index,
             },
         )
     });

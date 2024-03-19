@@ -1,5 +1,7 @@
 use crate::constants::DERIVATION_PATH;
-use crate::events::{ReceivedSolEvent, Retriable, SolanaSignature, SolanaSignatureRange};
+use crate::events::{
+    ReceivedSolEvent, Retriable, SolanaSignature, SolanaSignatureRange, WithdrawalEvent,
+};
 use crate::lifecycle::{SolanaNetwork, UpgradeArg};
 use crate::logs::DEBUG;
 
@@ -59,7 +61,8 @@ pub struct State {
 
     pub invalid_events: HashMap<String, SolanaSignature>,
     pub accepted_events: HashMap<String, ReceivedSolEvent>,
-    pub minted_events: HashMap<u64, ReceivedSolEvent>,
+    pub minted_events: HashMap<String, ReceivedSolEvent>,
+    pub withdrawal_events: HashMap<String, WithdrawalEvent>,
 
     /// Number of HTTP outcalls since the last upgrade.
     /// Used to correlate request and response in logs.
@@ -242,7 +245,7 @@ impl State {
         };
     }
 
-    pub fn record_minted_deposit(&mut self, deposit: ReceivedSolEvent, icp_mint_block_index: &u64) {
+    pub fn record_minted_event(&mut self, deposit: ReceivedSolEvent) {
         let key = &deposit.sol_sig;
 
         _ = match self.accepted_events.remove(key) {
@@ -251,11 +254,27 @@ impl State {
         };
 
         assert!(
-            self.minted_events.contains_key(icp_mint_block_index),
-            "Attempted to record existing minted deposit: {icp_mint_block_index}."
+            self.minted_events.contains_key(key),
+            "Attempted to record existing minted event: {key}."
         );
 
-        _ = self.minted_events.insert(*icp_mint_block_index, deposit);
+        _ = self.minted_events.insert(key.to_string(), deposit);
+    }
+
+    pub fn record_withdrawal_event(&mut self, withdrawal: WithdrawalEvent) {
+        let key = &withdrawal.sol_sig;
+
+        _ = match self.minted_events.remove(key) {
+            Some(event) => event,
+            None => panic!("Attempted to remove NON existing minted event: {key} ."),
+        };
+
+        assert!(
+            self.withdrawal_events.contains_key(key),
+            "Attempted to record existing withdrawal event: {key}."
+        );
+
+        _ = self.withdrawal_events.insert(key.to_string(), withdrawal);
     }
 }
 

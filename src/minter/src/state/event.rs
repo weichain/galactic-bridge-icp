@@ -1,5 +1,5 @@
 use crate::lifecycle::{InitArg, UpgradeArg};
-use crate::state::{ReceivedSolEvent, SolanaSignature, SolanaSignatureRange};
+use crate::state::{ReceivedSolEvent, SolanaSignature, SolanaSignatureRange, WithdrawalEvent};
 
 use minicbor::{Decode, Encode};
 
@@ -65,8 +65,12 @@ pub enum EventType {
         /// The minted ckSol event.
         #[n(0)]
         event_source: ReceivedSolEvent,
-        #[n(2)]
-        icp_mint_block_index: u64,
+    },
+    #[n(10)]
+    WithdrawalEvent {
+        /// The withdrawal ckSol event.
+        #[n(0)]
+        event_source: WithdrawalEvent,
     },
 }
 

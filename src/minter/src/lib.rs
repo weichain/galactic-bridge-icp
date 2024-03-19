@@ -8,4 +8,4 @@ pub mod logs;
 pub mod sol_rpc_client;
 pub mod state;
 pub mod storage;
-pub mod types;
+pub mod withdraw;

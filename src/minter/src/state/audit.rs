@@ -49,11 +49,11 @@ pub fn apply_state_transition(state: &mut State, payload: &EventType) {
         } => {
             state.record_accepted_event(event_source.clone());
         }
-        EventType::MintedEvent {
-            event_source,
-            icp_mint_block_index,
-        } => {
-            state.record_minted_deposit(event_source.clone(), icp_mint_block_index);
+        EventType::MintedEvent { event_source } => {
+            state.record_minted_event(event_source.clone());
+        }
+        EventType::WithdrawalEvent { event_source } => {
+            state.record_withdrawal_event(event_source.clone());
         }
     }
 }

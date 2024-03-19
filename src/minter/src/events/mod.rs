@@ -1,3 +1,4 @@
+use crate::withdraw::Coupon;
 use candid::Principal;
 use ic_stable_structures::Storable;
 use icrc_ledger_types::icrc1::transfer::Memo;
@@ -7,6 +8,7 @@ use serde::Serialize;
 pub trait Retriable {
     fn get_retries(&self) -> u8;
     fn increment_retries(&mut self);
+    fn reset_retries(&mut self);
 }
 
 #[derive(Debug, Encode, Decode, PartialEq, Clone, Eq)]
@@ -38,6 +40,10 @@ impl Retriable for SolanaSignatureRange {
     fn increment_retries(&mut self) {
         self.retries += 1;
     }
+
+    fn reset_retries(&mut self) {
+        self.retries = 0;
+    }
 }
 
 #[derive(Debug, Encode, Decode, PartialEq, Clone, Eq)]
@@ -66,20 +72,36 @@ impl Retriable for SolanaSignature {
     fn increment_retries(&mut self) {
         self.retries += 1;
     }
+
+    fn reset_retries(&mut self) {
+        self.retries = 0;
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Encode, Decode, Serialize)]
 pub struct ReceivedSolEvent {
     #[n(0)]
-    pub sol_sig: String,
-    #[n(1)]
-    pub from_address: String,
+    pub from_sol_address: String,
+    #[cbor(n(1), with = "crate::cbor::principal")]
+    pub to_icp_address: Principal,
     #[n(2)]
-    pub value: u64,
-    #[cbor(n(3), with = "crate::cbor::principal")]
-    pub to: Principal,
+    pub amount: u64,
+    #[n(3)]
+    pub sol_sig: String,
     #[n(4)]
+    icp_mint_block_index: Option<u64>,
+    #[n(5)]
     retries: u8,
+}
+
+impl ReceivedSolEvent {
+    pub fn update_mint_block_index(&mut self, block_index: u64) {
+        self.icp_mint_block_index = Some(block_index);
+    }
+
+    pub fn get_mint_block_index(&self) -> Option<u64> {
+        self.icp_mint_block_index
+    }
 }
 
 impl Retriable for ReceivedSolEvent {
@@ -89,6 +111,10 @@ impl Retriable for ReceivedSolEvent {
 
     fn increment_retries(&mut self) {
         self.retries += 1;
+    }
+
+    fn reset_retries(&mut self) {
+        self.retries = 0;
     }
 }
 
@@ -118,11 +144,84 @@ impl From<(&str, &str, &str)> for ReceivedSolEvent {
         let principal = Principal::from_bytes(std::borrow::Cow::Borrowed(address_bytes));
 
         ReceivedSolEvent {
+            from_sol_address: from_address.to_string(),
+            to_icp_address: principal,
+            amount: value,
             sol_sig: sol_sig.to_string(),
-            from_address: from_address.to_string(),
-            value,
-            to: principal,
+            icp_mint_block_index: None,
             retries: 0,
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Encode, Decode, Serialize)]
+pub struct WithdrawalEvent {
+    #[n(0)]
+    pub id: u64,
+    #[n(1)]
+    pub sol_mint_address: String,
+    #[cbor(n(2), with = "crate::cbor::principal")]
+    pub icp_address: Principal,
+    #[n(3)]
+    pub sol_withdraw_address: String,
+    #[n(4)]
+    pub amount: u64,
+    #[n(5)]
+    pub timestamp: u64,
+    #[n(6)]
+    pub icp_mint_block_index: u64,
+    #[n(7)]
+    pub icp_burn_block_index: u64,
+    #[n(8)]
+    pub sol_sig: String,
+}
+
+impl WithdrawalEvent {
+    pub async fn to_coupon(&self) -> Coupon {
+        let (serialized_coupon, signature_hex) = self.sign_with_ecdsa().await;
+        let icp_public_key_hex = crate::state::read_state(|s| s.uncompressed_public_key());
+
+        let mut response = Coupon::new(serialized_coupon, signature_hex, icp_public_key_hex);
+        response.y_parity();
+
+        response
+    }
+
+    async fn sign_with_ecdsa(&self) -> (String, String) {
+        use crate::constants::DERIVATION_PATH;
+        use ic_cdk::api::{
+            call::RejectionCode,
+            management_canister::ecdsa::{
+                sign_with_ecdsa, EcdsaCurve, EcdsaKeyId, SignWithEcdsaArgument,
+                SignWithEcdsaResponse,
+            },
+        };
+        use sha2::{Digest, Sha256};
+
+        // Serialize the coupon
+        let serialized_coupon: String = serde_json::to_string(self).unwrap();
+
+        // Hash the serialized coupon using SHA-256
+        let mut hasher = Sha256::new();
+        hasher.update(serialized_coupon.clone());
+        let hashed_coupon = hasher.finalize().to_vec();
+
+        let args = SignWithEcdsaArgument {
+            message_hash: hashed_coupon,
+            derivation_path: DERIVATION_PATH.into_iter().map(|x| x.to_vec()).collect(),
+            key_id: EcdsaKeyId {
+                curve: EcdsaCurve::Secp256k1,
+                name: crate::state::read_state(|s| s.ecdsa_key_name.clone()),
+            },
+        };
+        let response: Result<(SignWithEcdsaResponse,), (RejectionCode, String)> =
+            sign_with_ecdsa(args).await;
+
+        match response {
+            Ok(res) => (serialized_coupon, hex::encode(&res.0.signature)),
+            Err((code, msg)) => {
+                panic!("Failed to sign_with_ecdsa: {:?}", (code, msg));
+            }
         }
     }
 }
