@@ -33,25 +33,25 @@ fn setup_timers() {
         });
     });
 
-    ic_cdk_timers::set_timer(GET_LATEST_SOLANA_SIGNATURE, || {
+    ic_cdk_timers::set_timer_interval(GET_LATEST_SOLANA_SIGNATURE, || {
         ic_cdk::spawn(async {
             get_latest_signature().await;
         });
     });
 
-    ic_cdk_timers::set_timer(SCRAPPING_SOLANA_SIGNATURE_RANGES, || {
+    ic_cdk_timers::set_timer_interval(SCRAPPING_SOLANA_SIGNATURE_RANGES, || {
         ic_cdk::spawn(async {
             scrap_signature_range().await;
         });
     });
 
-    ic_cdk_timers::set_timer(SCRAPPING_SOLANA_SIGNATURES, || {
+    ic_cdk_timers::set_timer_interval(SCRAPPING_SOLANA_SIGNATURES, || {
         ic_cdk::spawn(async {
             scrap_signatures().await;
         });
     });
 
-    ic_cdk_timers::set_timer(MINT_CKSOL, || {
+    ic_cdk_timers::set_timer_interval(MINT_CKSOL, || {
         ic_cdk::spawn(async {
             mint_cksol().await;
         });
@@ -63,8 +63,6 @@ fn setup_timers() {
 pub fn init(args: MinterArg) {
     match args {
         MinterArg::Init(init_arg) => {
-            ic_cdk::println!("init_arg: {:?}", init_arg);
-
             ic_canister_log::log!(INFO, "[init]: initialized minter with arg: {:?}", init_arg);
             STATE.with(|cell| {
                 storage::record_event(EventType::Init(init_arg.clone()));
@@ -103,6 +101,7 @@ fn post_upgrade(minter_arg: Option<MinterArg>) {
 }
 
 //////////////////////////
+/// dfx canister call minter get_address
 #[update]
 pub async fn get_address() -> (String, String) {
     read_state(|s| (s.compressed_public_key(), s.uncompressed_public_key()))
@@ -128,6 +127,13 @@ async fn withdraw(solana_address: String, withdraw_amount: candid::Nat) -> Resul
 #[query]
 fn get_state() {
     read_state(|s| ic_cdk::println!("state: {:?}", s));
+}
+
+// dfx canister call minter get_active_tasks
+// TODO: only for testing
+#[query]
+fn get_active_tasks() {
+    read_state(|s| ic_cdk::println!("active_tasks: {:?}", s.active_tasks));
 }
 
 #[query]

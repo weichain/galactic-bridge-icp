@@ -6,6 +6,7 @@ use crate::sol_rpc_client::SolRpcClient;
 use crate::state::audit::process_event;
 use crate::state::event::EventType;
 use crate::state::{mutate_state, read_state, TaskType};
+use crate::utils::{HashMapUtils, VecUtils};
 
 use candid::Principal;
 use icrc_ledger_types::icrc1::transfer::Memo;
@@ -59,6 +60,12 @@ pub async fn scrap_signature_range() {
 
     let rpc_client = read_state(SolRpcClient::from_state);
     let ranges_map = read_state(|s| s.solana_signature_ranges.clone());
+
+    ic_canister_log::log!(
+        DEBUG,
+        "Known ranges: \n {:?}",
+        HashMapUtils::format_keys_as_string(&ranges_map)
+    );
 
     for (_, v) in &ranges_map {
         process_signature_range_with_limit(&rpc_client, v.clone(), None).await;
@@ -134,14 +141,18 @@ pub async fn scrap_signatures() {
     let rpc_client = read_state(SolRpcClient::from_state);
     let signatures_map = &read_state(|s| s.solana_signatures.clone());
 
-    ic_canister_log::log!(DEBUG, " signatures: {:?}", signatures_map.keys());
+    ic_canister_log::log!(
+        DEBUG,
+        "Known signatures: \n {:?}",
+        HashMapUtils::format_keys_as_string(&signatures_map)
+    );
 
     let transactions = process_signatures_with_limit(&rpc_client, signatures_map, None).await;
 
     ic_canister_log::log!(
         DEBUG,
-        "Parsing transactions {:?} ...",
-        signatures_map.iter().map(|(s, _)| s.to_string())
+        "Parsing transactions \n {:?}",
+        VecUtils::format_keys_as_string(&transactions)
     );
 
     parse_log_messages(&transactions);
