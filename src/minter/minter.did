@@ -20,6 +20,7 @@ type UpgradeArg = record {
   minimum_withdrawal_amount : opt nat;
 };
 service : (MinterArg) -> {
+  get_active_tasks : () -> () query;
   get_address : () -> (text, text);
   get_ledger_id : () -> (text) query;
   get_state : () -> () query;
