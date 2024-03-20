@@ -27,25 +27,25 @@ pub fn apply_state_transition(state: &mut State, payload: &EventType) {
         EventType::RetrySolanaSignatureRange {
             range,
             failed_sub_range,
-            fail_reason,
+            fail_reason: _,
         } => {
             state.retry_solana_signature_range(range.clone(), failed_sub_range.clone());
         }
         EventType::SolanaSignature {
             signature,
-            fail_reason,
+            fail_reason: _,
         } => {
             state.record_solana_signature(signature.clone());
         }
         EventType::InvalidEvent {
             signature,
-            fail_reason,
+            fail_reason: _,
         } => {
             state.record_invalid_event(signature.clone());
         }
         EventType::AcceptedEvent {
             event_source,
-            fail_reason,
+            fail_reason: _,
         } => {
             state.record_accepted_event(event_source.clone());
         }
