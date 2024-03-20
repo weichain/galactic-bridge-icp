@@ -62,7 +62,11 @@ pub struct State {
     pub invalid_events: HashMap<String, SolanaSignature>,
     pub accepted_events: HashMap<String, ReceivedSolEvent>,
     pub minted_events: HashMap<String, ReceivedSolEvent>,
-    pub withdrawal_events: HashMap<String, WithdrawalEvent>,
+
+    pub withdrawal_events: HashMap<u64, WithdrawalEvent>,
+
+    // Unique identifier for each withdrawal
+    pub withdrawal_id_counter: u64,
 
     /// Number of HTTP outcalls since the last upgrade.
     /// Used to correlate request and response in logs.
@@ -262,19 +266,27 @@ impl State {
     }
 
     pub fn record_withdrawal_event(&mut self, withdrawal: WithdrawalEvent) {
-        let key = &withdrawal.sol_sig;
-
-        _ = match self.minted_events.remove(key) {
-            Some(event) => event,
-            None => panic!("Attempted to remove NON existing minted event: {key} ."),
-        };
-
+        let key = withdrawal.id;
         assert!(
-            self.withdrawal_events.contains_key(key),
+            self.withdrawal_events.contains_key(&key),
             "Attempted to record existing withdrawal event: {key}."
         );
 
-        _ = self.withdrawal_events.insert(key.to_string(), withdrawal);
+        _ = self.withdrawal_events.insert(key, withdrawal);
+    }
+
+    pub fn next_request_id(&mut self) -> u64 {
+        let current_request_id = self.http_request_counter;
+        // overflow is not an issue here because we only use `next_request_id` to correlate
+        // requests and responses in logs.
+        self.http_request_counter = self.http_request_counter.wrapping_add(1);
+        current_request_id
+    }
+
+    pub fn next_withdrawal_id(&mut self) -> u64 {
+        let current_withdrawal_id = self.withdrawal_id_counter;
+        self.withdrawal_id_counter = self.withdrawal_id_counter.wrapping_add(1);
+        current_withdrawal_id
     }
 }
 

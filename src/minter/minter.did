@@ -1,3 +1,9 @@
+type Coupon = record {
+  recovery_id : opt nat8;
+  icp_public_key_hex : text;
+  message : text;
+  signature_hex : text;
+};
 type InitArg = record {
   ecdsa_key_name : text;
   solana_initial_signature : text;
@@ -7,19 +13,16 @@ type InitArg = record {
   minimum_withdrawal_amount : nat;
 };
 type MinterArg = variant { Upgrade : UpgradeArg; Init : InitArg };
-type Result = variant { Ok : SignatureVerificationReply; Err : text };
-type SignatureVerificationReply = record { is_signature_valid : bool };
+type Result = variant { Ok : Coupon; Err : text };
 type SolanaNetwork = variant { Mainnet; Testnet };
 type UpgradeArg = record {
   solana_contract_address : opt text;
   minimum_withdrawal_amount : opt nat;
 };
 service : (MinterArg) -> {
-  burn : (nat) -> (nat);
   get_address : () -> (text, text);
   get_ledger_id : () -> (text) query;
   get_state : () -> () query;
-  mint : (principal, nat) -> (nat);
-  verify : (text, text, text) -> (Result) query;
-  y_parity : (text, text, text) -> (nat64) query;
+  verify : (Coupon) -> (bool) query;
+  withdraw : (text, nat) -> (Result);
 }

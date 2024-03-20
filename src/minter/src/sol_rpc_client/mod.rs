@@ -8,7 +8,7 @@ use crate::sol_rpc_client::types::{
     ConfirmationStatus, RpcMethod, HEADER_SIZE_LIMIT, SIGNATURE_RESPONSE_SIZE_ESTIMATE,
     TRANSACTION_RESPONSE_SIZE_ESTIMATE,
 };
-use crate::state::{read_state, State};
+use crate::state::{mutate_state, read_state, State};
 
 use ic_cdk::api::{
     call::RejectionCode,
@@ -139,7 +139,7 @@ impl SolRpcClient {
 
         let payload = serde_json::to_string(&json!({
             "jsonrpc": "2.0",
-            "id": 1,
+            "id": mutate_state(State::next_request_id),
             "method": RpcMethod::GetSignaturesForAddress.as_str(),
             "params": params
         }));
@@ -187,17 +187,15 @@ impl SolRpcClient {
     ) -> Result<HashMap<String, Result<Option<GetTransactionResponse>, SolRcpError>>, SolRcpError>
     {
         let mut rpc_request = Vec::new();
-        let mut id = 1;
 
         for signature in &signatures {
             let transaction = json!({
                 "jsonrpc": "2.0",
-                "id": id,
+                "id": mutate_state(State::next_request_id),
                 "method": RpcMethod::GetTransaction.as_str().to_string(),
                 "params": [signature]
             });
             rpc_request.push(transaction);
-            id += 1;
         }
 
         let payload = serde_json::to_string(&rpc_request);

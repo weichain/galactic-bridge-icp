@@ -1,17 +1,20 @@
-use minter::constants::{
-    GET_LATEST_SOLANA_SIGNATURE, MINT_CKSOL, SCRAPPING_SOLANA_SIGNATURES,
-    SCRAPPING_SOLANA_SIGNATURE_RANGES,
+use minter::{
+    constants::{
+        GET_LATEST_SOLANA_SIGNATURE, MINT_CKSOL, SCRAPPING_SOLANA_SIGNATURES,
+        SCRAPPING_SOLANA_SIGNATURE_RANGES,
+    },
+    deposit::{get_latest_signature, mint_cksol, scrap_signature_range, scrap_signatures},
+    lifecycle::{post_upgrade as lifecycle_post_upgrade, MinterArg},
+    logs::INFO,
+    state::event::EventType,
+    state::{lazy_call_ecdsa_public_key, read_state, State, STATE},
+    storage,
+    withdraw::{withdraw_cksol, Coupon},
 };
-use minter::deposit::{get_latest_signature, mint_cksol, scrap_signature_range, scrap_signatures};
-use minter::lifecycle::{post_upgrade as lifecycle_post_upgrade, MinterArg};
-use minter::logs::INFO;
-use minter::state::event::EventType;
-use minter::state::{lazy_call_ecdsa_public_key, read_state, State, STATE};
-use minter::storage;
-use minter::withdraw::Coupon;
 
 use candid::candid_method;
 use ic_cdk_macros::{init, post_upgrade, pre_upgrade, query, update};
+use num_traits::cast::ToPrimitive;
 use std::time::Duration;
 
 fn setup_timers() {
@@ -103,6 +106,19 @@ fn post_upgrade(minter_arg: Option<MinterArg>) {
 #[update]
 pub async fn get_address() -> (String, String) {
     read_state(|s| (s.compressed_public_key(), s.uncompressed_public_key()))
+}
+
+#[update]
+async fn withdraw(solana_address: String, withdraw_amount: candid::Nat) -> Result<Coupon, String> {
+    withdraw_cksol(
+        ic_cdk::caller(),
+        solana_address,
+        withdraw_amount
+            .0
+            .to_u64()
+            .expect("withdraw amount should fit into u64"),
+    )
+    .await
 }
 
 // dfx canister call minter get_state

@@ -67,6 +67,7 @@ impl TryFrom<InitArg> for State {
             // withdrawal events
             withdrawal_events: Default::default(),
 
+            withdrawal_id_counter: 0,
             http_request_counter: 0,
 
             active_tasks: Default::default(),

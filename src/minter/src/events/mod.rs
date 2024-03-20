@@ -1,9 +1,18 @@
+use crate::constants::DERIVATION_PATH;
 use crate::withdraw::Coupon;
+
 use candid::Principal;
+use ic_cdk::api::{
+    call::RejectionCode,
+    management_canister::ecdsa::{
+        sign_with_ecdsa, EcdsaCurve, EcdsaKeyId, SignWithEcdsaArgument, SignWithEcdsaResponse,
+    },
+};
 use ic_stable_structures::Storable;
 use icrc_ledger_types::icrc1::transfer::Memo;
 use minicbor::{Decode, Encode};
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 
 pub trait Retriable {
     fn get_retries(&self) -> u8;
@@ -158,22 +167,16 @@ impl From<(&str, &str, &str)> for ReceivedSolEvent {
 pub struct WithdrawalEvent {
     #[n(0)]
     pub id: u64,
-    #[n(1)]
-    pub sol_mint_address: String,
-    #[cbor(n(2), with = "crate::cbor::principal")]
-    pub icp_address: Principal,
+    #[cbor(n(1), with = "crate::cbor::principal")]
+    pub from_icp_address: Principal,
+    #[n(2)]
+    pub to_sol_address: String,
     #[n(3)]
-    pub sol_withdraw_address: String,
-    #[n(4)]
     pub amount: u64,
-    #[n(5)]
+    #[n(4)]
     pub timestamp: u64,
-    #[n(6)]
-    pub icp_mint_block_index: u64,
-    #[n(7)]
+    #[n(5)]
     pub icp_burn_block_index: u64,
-    #[n(8)]
-    pub sol_sig: String,
 }
 
 impl WithdrawalEvent {
@@ -188,16 +191,6 @@ impl WithdrawalEvent {
     }
 
     async fn sign_with_ecdsa(&self) -> (String, String) {
-        use crate::constants::DERIVATION_PATH;
-        use ic_cdk::api::{
-            call::RejectionCode,
-            management_canister::ecdsa::{
-                sign_with_ecdsa, EcdsaCurve, EcdsaKeyId, SignWithEcdsaArgument,
-                SignWithEcdsaResponse,
-            },
-        };
-        use sha2::{Digest, Sha256};
-
         // Serialize the coupon
         let serialized_coupon: String = serde_json::to_string(self).unwrap();
 

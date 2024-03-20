@@ -1,17 +1,19 @@
 use crate::{
     logs::DEBUG,
-    state::{audit::process_event, event::EventType, mutate_state, read_state},
+    state::{audit::process_event, event::EventType, mutate_state, read_state, State},
 };
-use icrc_ledger_client_cdk::{CdkRuntime, ICRC1Client};
-use icrc_ledger_types::icrc2::transfer_from::TransferFromArgs;
 
 use candid::CandidType;
 use candid::Principal;
+use icrc_ledger_client_cdk::{CdkRuntime, ICRC1Client};
+use icrc_ledger_types::icrc2::transfer_from::TransferFromArgs;
 use num_traits::ToPrimitive;
 use serde::{Deserialize, Serialize};
 
-pub async fn withdraw_cksol(from: Principal, amount: u64) {
+// TODO: add guard
+pub async fn withdraw_cksol(from: Principal, to: String, amount: u64) -> Result<Coupon, String> {
     let ledger_canister_id = read_state(|s| s.ledger_id);
+    let withdrawal_id = mutate_state(State::next_withdrawal_id);
     let client = ICRC1Client {
         runtime: CdkRuntime,
         ledger_canister_id,
@@ -24,6 +26,7 @@ pub async fn withdraw_cksol(from: Principal, amount: u64) {
         amount: candid::Nat::from(amount),
         fee: None,
         created_at_time: None,
+        // TODO: add memo
         memo: None,
     };
 
@@ -33,28 +36,42 @@ pub async fn withdraw_cksol(from: Principal, amount: u64) {
                 .0
                 .to_u64()
                 .expect("block index should fit into u64");
+
+            let withdraw_event = crate::events::WithdrawalEvent {
+                id: withdrawal_id,
+                from_icp_address: from,
+                to_sol_address: to,
+                amount,
+                timestamp: ic_cdk::api::time(),
+                icp_burn_block_index: burn_block_index,
+            };
+
+            mutate_state(|s| {
+                process_event(
+                    s,
+                    EventType::WithdrawalEvent {
+                        event_source: withdraw_event.clone(),
+                    },
+                )
+            });
+
+            // TODO: in case of failure, we cant revert the state -> maybe a method query that allows regeneration of the coupon is necessary
+            let coupon = withdraw_event.to_coupon().await;
+            Ok(coupon)
         }
         Ok(Err(err)) => {
-            ic_canister_log::log!(DEBUG, "[Withdraw] Failed to burn ckSOL: {err}");
+            let error_msg = format!("[Withdraw] Failed to burn ckSOL: {err}");
+            ic_canister_log::log!(DEBUG, "{}", error_msg);
+            Err(error_msg)
         }
         Err(err) => {
-            ic_canister_log::log!(
-                DEBUG,
+            let error_msg = format!(
                 "[Withdraw] Failed to send a message to the ledger ({ledger_canister_id}): {err:?}"
             );
+            ic_canister_log::log!(DEBUG, "{}", error_msg);
+            Err(error_msg)
         }
-    };
-    // mutate_state(|s| {
-    //     process_event(
-    //         s,
-    //         EventType::ReimbursedEthWithdrawal(Reimbursed {
-    //             withdrawal_id: reimbursement_request.withdrawal_id,
-    //             reimbursed_in_block: LedgerMintIndex::new(block_index),
-    //             reimbursed_amount: reimbursement_request.reimbursed_amount,
-    //             transaction_hash: reimbursement_request.transaction_hash,
-    //         }),
-    //     )
-    // });
+    }
 }
 
 #[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
