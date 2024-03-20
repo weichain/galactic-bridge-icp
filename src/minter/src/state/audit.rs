@@ -11,7 +11,7 @@ pub fn apply_state_transition(state: &mut State, payload: &EventType) {
             panic!("state re-initialization is not allowed: {init_arg:?}");
         }
         EventType::Upgrade(upgrade_arg) => {
-            // TODO:
+            // TODO: upgrade
             state.upgrade(upgrade_arg.clone())
             // .expect("applying upgrade event should succeed");
         }

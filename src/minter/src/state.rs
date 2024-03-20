@@ -53,16 +53,19 @@ pub struct State {
     pub ledger_id: Principal,
     pub minimum_withdrawal_amount: BigUint,
 
-    // internals
+    // scrapper config
     pub solana_last_known_signature: Option<String>,
 
     pub solana_signature_ranges: HashMap<String, SolanaSignatureRange>,
     pub solana_signatures: HashMap<String, SolanaSignature>,
 
+    // invalid transactions - cannot be parsed, does not hold deposit event, blocked user, etc.
     pub invalid_events: HashMap<String, SolanaSignature>,
+    // valid transaction events
     pub accepted_events: HashMap<String, ReceivedSolEvent>,
+    // minted events
     pub minted_events: HashMap<String, ReceivedSolEvent>,
-
+    // withdrawal events
     pub withdrawal_events: HashMap<u64, WithdrawalEvent>,
 
     // Withdrawal requests that are currently being processed

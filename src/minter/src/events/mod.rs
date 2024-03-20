@@ -134,7 +134,6 @@ impl From<(&str, &str, &str)> for ReceivedSolEvent {
         let bytes = BASE64_STANDARD.decode(encode_data).unwrap();
 
         let amount_bytes = &bytes[bytes.len() - 8..];
-        // TODO: maybe convert to BigUint
         let mut value: u64 = 0;
         for i in 0..8 {
             value |= (amount_bytes[i] as u64) << (i * 8);

@@ -32,8 +32,6 @@ impl TryFrom<InitArg> for State {
             minimum_withdrawal_amount,
         }: InitArg,
     ) -> Result<Self, Self::Error> {
-        // TODO: do conversion between types here
-
         let minimum_withdrawal_amount = minimum_withdrawal_amount.0.to_biguint().ok_or(
             InvalidStateError::InvalidMinimumWithdrawalAmount(
                 "ERROR: minimum_withdrawal_amount is not a valid u256".to_string(),
@@ -41,37 +39,23 @@ impl TryFrom<InitArg> for State {
         )?;
 
         let state = Self {
-            // solana related config
             solana_network,
             solana_contract_address,
             solana_initial_signature,
-
-            // icp related config
             ecdsa_key_name,
             ecdsa_public_key: None,
             ledger_id,
             minimum_withdrawal_amount,
-
-            // scrapper config
             solana_last_known_signature: None,
-
             solana_signature_ranges: Default::default(),
             solana_signatures: Default::default(),
-
-            // invalid transactions - cannot be parsed, does not hold deposit event, blocked user, etc.
             invalid_events: Default::default(),
-            // valid transaction events
             accepted_events: Default::default(),
-            // minted events
             minted_events: Default::default(),
-            // withdrawal events
             withdrawal_events: Default::default(),
-
             withdrawing_principals: Default::default(),
             withdrawal_id_counter: 0,
-
             http_request_counter: 0,
-
             active_tasks: Default::default(),
         };
 
@@ -88,7 +72,7 @@ pub struct UpgradeArg {
     pub minimum_withdrawal_amount: Option<Nat>,
 }
 
-// TODO: implement it
+// TODO: upgrade
 pub fn post_upgrade(upgrade_args: Option<UpgradeArg>) {}
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
