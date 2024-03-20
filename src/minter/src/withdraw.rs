@@ -1,4 +1,5 @@
 use crate::{
+    events::WithdrawalEvent,
     guard::retrieve_eth_guard,
     logs::DEBUG,
     state::{audit::process_event, event::EventType, mutate_state, read_state, State},
@@ -7,11 +8,11 @@ use crate::{
 use candid::CandidType;
 use candid::Principal;
 use icrc_ledger_client_cdk::{CdkRuntime, ICRC1Client};
-use icrc_ledger_types::icrc2::transfer_from::TransferFromArgs;
+use icrc_ledger_types::{icrc1::transfer::Memo, icrc2::transfer_from::TransferFromArgs};
+use k256::ecdsa::{signature::Verifier, RecoveryId, Signature, VerifyingKey};
 use num_traits::ToPrimitive;
 use serde::{Deserialize, Serialize};
 
-// TODO: add guard
 pub async fn withdraw_cksol(from: Principal, to: String, amount: u64) -> Result<Coupon, String> {
     let _guard = retrieve_eth_guard(from).unwrap_or_else(|e| {
         ic_cdk::trap(&format!(
@@ -27,15 +28,23 @@ pub async fn withdraw_cksol(from: Principal, to: String, amount: u64) -> Result<
         ledger_canister_id,
     };
 
+    let mut withdraw_event = crate::events::WithdrawalEvent {
+        id: withdrawal_id,
+        from_icp_address: from,
+        to_sol_address: to,
+        amount,
+        timestamp: None,
+        icp_burn_block_index: None,
+    };
+
     let args = TransferFromArgs {
         spender_subaccount: None,
         from: from.into(),
         to: ic_cdk::id().into(),
         amount: candid::Nat::from(amount),
         fee: None,
-        created_at_time: None,
-        // TODO: add memo
-        memo: None,
+        created_at_time: Some(ic_cdk::api::time()),
+        memo: Some(withdraw_event.clone().into()),
     };
 
     match client.transfer_from(args).await {
@@ -45,14 +54,9 @@ pub async fn withdraw_cksol(from: Principal, to: String, amount: u64) -> Result<
                 .to_u64()
                 .expect("block index should fit into u64");
 
-            let withdraw_event = crate::events::WithdrawalEvent {
-                id: withdrawal_id,
-                from_icp_address: from,
-                to_sol_address: to,
-                amount,
-                timestamp: ic_cdk::api::time(),
-                icp_burn_block_index: burn_block_index,
-            };
+            // update event with the burn block index
+            withdraw_event.timestamp = Some(ic_cdk::api::time());
+            withdraw_event.icp_burn_block_index = Some(burn_block_index);
 
             mutate_state(|s| {
                 process_event(
@@ -82,6 +86,7 @@ pub async fn withdraw_cksol(from: Principal, to: String, amount: u64) -> Result<
     }
 }
 
+/// Types
 #[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
 pub struct Coupon {
     pub message: String,
@@ -102,8 +107,6 @@ impl Coupon {
     }
 
     pub fn y_parity(&mut self) {
-        use k256::ecdsa::{RecoveryId, Signature, VerifyingKey};
-
         let signature_bytes =
             hex::decode(&self.signature_hex).expect("failed to hex-decode signature");
         let signature = Signature::try_from(signature_bytes.as_slice())
@@ -129,15 +132,13 @@ impl Coupon {
             }
         }
 
-        panic!(
+        ic_cdk::trap(&format!(
             "failed to recover the parity bit from a signature: sig: {}, pubkey: {}",
-            self.signature_hex, self.icp_public_key_hex
-        )
+            self.signature_hex, self.icp_public_key_hex,
+        ))
     }
 
     pub fn verify(&self) -> bool {
-        use k256::ecdsa::{signature::Verifier, Signature, VerifyingKey};
-
         let signature_bytes =
             hex::decode(&self.signature_hex).expect("failed to hex-decode signature");
         let pubkey_bytes =
@@ -151,5 +152,28 @@ impl Coupon {
             .expect("failed to deserialize sec1 encoding into public key")
             .verify(message_bytes, &signature)
             .is_ok()
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Serialize)]
+struct PartialWithdrawalEvent {
+    id: u64,
+    from_icp_address: Principal,
+    to_sol_address: String,
+    amount: u64,
+}
+
+impl From<WithdrawalEvent> for Memo {
+    fn from(event: WithdrawalEvent) -> Self {
+        let partial_event = PartialWithdrawalEvent {
+            id: event.id,
+            from_icp_address: event.from_icp_address,
+            to_sol_address: event.to_sol_address,
+            amount: event.amount,
+        };
+
+        let bytes = serde_cbor::ser::to_vec(&partial_event)
+            .expect("Failed to serialize PartialWithdrawalEvent");
+        Memo::from(bytes)
     }
 }

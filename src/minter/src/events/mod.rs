@@ -9,7 +9,6 @@ use ic_cdk::api::{
     },
 };
 use ic_stable_structures::Storable;
-use icrc_ledger_types::icrc1::transfer::Memo;
 use minicbor::{Decode, Encode};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -127,13 +126,6 @@ impl Retriable for ReceivedSolEvent {
     }
 }
 
-impl From<ReceivedSolEvent> for Memo {
-    fn from(event: ReceivedSolEvent) -> Self {
-        let bytes = serde_cbor::ser::to_vec(&event).expect("Failed to serialize ReceivedSolEvent");
-        Memo::from(bytes)
-    }
-}
-
 impl From<(&str, &str, &str)> for ReceivedSolEvent {
     fn from(data: (&str, &str, &str)) -> Self {
         use base64::prelude::*;
@@ -174,9 +166,9 @@ pub struct WithdrawalEvent {
     #[n(3)]
     pub amount: u64,
     #[n(4)]
-    pub timestamp: u64,
+    pub timestamp: Option<u64>,
     #[n(5)]
-    pub icp_burn_block_index: u64,
+    pub icp_burn_block_index: Option<u64>,
 }
 
 impl WithdrawalEvent {

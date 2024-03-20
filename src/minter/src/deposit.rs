@@ -7,7 +7,10 @@ use crate::state::audit::process_event;
 use crate::state::event::EventType;
 use crate::state::{mutate_state, read_state, TaskType};
 
+use candid::Principal;
+use icrc_ledger_types::icrc1::transfer::Memo;
 use num_traits::ToPrimitive;
+use serde::Serialize;
 use std::collections::HashMap;
 
 const GET_SIGNATURES_BY_ADDRESS_LIMIT: u64 = 10;
@@ -416,4 +419,28 @@ fn remove_solana_signature_range(range: &SolanaSignatureRange) {
     mutate_state(|s| {
         process_event(s, EventType::RemoveSolanaSignatureRange(range.clone()));
     });
+}
+
+/// Types
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Serialize)]
+struct PartialReceivedSolEvent {
+    from_sol_address: String,
+    to_icp_address: Principal,
+    amount: u64,
+    sol_sig: String,
+}
+
+impl From<ReceivedSolEvent> for Memo {
+    fn from(event: ReceivedSolEvent) -> Self {
+        let partial_event = PartialReceivedSolEvent {
+            from_sol_address: event.from_sol_address,
+            to_icp_address: event.to_icp_address,
+            amount: event.amount,
+            sol_sig: event.sol_sig,
+        };
+
+        let bytes = serde_cbor::ser::to_vec(&partial_event)
+            .expect("Failed to serialize PartialReceivedSolEvent");
+        Memo::from(bytes)
+    }
 }
