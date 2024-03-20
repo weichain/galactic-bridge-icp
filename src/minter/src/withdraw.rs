@@ -1,4 +1,5 @@
 use crate::{
+    guard::retrieve_eth_guard,
     logs::DEBUG,
     state::{audit::process_event, event::EventType, mutate_state, read_state, State},
 };
@@ -12,6 +13,13 @@ use serde::{Deserialize, Serialize};
 
 // TODO: add guard
 pub async fn withdraw_cksol(from: Principal, to: String, amount: u64) -> Result<Coupon, String> {
+    let _guard = retrieve_eth_guard(from).unwrap_or_else(|e| {
+        ic_cdk::trap(&format!(
+            "Failed retrieving guard for principal {}: {:?}",
+            from, e
+        ))
+    });
+
     let ledger_canister_id = read_state(|s| s.ledger_id);
     let withdrawal_id = mutate_state(State::next_withdrawal_id);
     let client = ICRC1Client {

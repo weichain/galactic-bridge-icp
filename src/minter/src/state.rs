@@ -11,7 +11,7 @@ use ic_cdk::api::management_canister::ecdsa::EcdsaPublicKeyResponse;
 use num_bigint::BigUint;
 use std::{
     cell::RefCell,
-    collections::{HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
 };
 use strum_macros::EnumIter;
 
@@ -65,6 +65,8 @@ pub struct State {
 
     pub withdrawal_events: HashMap<u64, WithdrawalEvent>,
 
+    // Withdrawal requests that are currently being processed
+    pub withdrawing_principals: BTreeSet<Principal>,
     // Unique identifier for each withdrawal
     pub withdrawal_id_counter: u64,
 

@@ -110,8 +110,10 @@ pub async fn get_address() -> (String, String) {
 
 #[update]
 async fn withdraw(solana_address: String, withdraw_amount: candid::Nat) -> Result<Coupon, String> {
+    let caller = validate_caller_not_anonymous();
+
     withdraw_cksol(
-        ic_cdk::caller(),
+        caller,
         solana_address,
         withdraw_amount
             .0
@@ -138,5 +140,14 @@ async fn verify(coupon: Coupon) -> bool {
     coupon.verify()
 }
 
+//////////////////////////
 fn main() {}
 ic_cdk_macros::export_candid!();
+
+fn validate_caller_not_anonymous() -> candid::Principal {
+    let principal = ic_cdk::caller();
+    if principal == candid::Principal::anonymous() {
+        panic!("anonymous principal is not allowed");
+    }
+    principal
+}

@@ -4,7 +4,6 @@ use std::collections::BTreeSet;
 use std::marker::PhantomData;
 
 pub const MAX_CONCURRENT: usize = 100;
-pub const MAX_PENDING: usize = 100;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum GuardError {
@@ -15,22 +14,16 @@ pub enum GuardError {
 
 pub trait RequestsGuardedByPrincipal {
     fn guarded_principals(state: &mut State) -> &mut BTreeSet<Principal>;
-    fn pending_requests_count(state: &State) -> usize;
 }
 
-// TODO: this might be useless
-// #[derive(Debug, PartialEq, Eq)]
-// pub struct PendingRetrieveEthRequests;
+#[derive(Debug, PartialEq, Eq)]
+pub struct PendingRetrieveEthRequests;
 
-// impl RequestsGuardedByPrincipal for PendingRetrieveEthRequests {
-//     fn guarded_principals(state: &mut State) -> &mut BTreeSet<Principal> {
-//         &mut state.retrieve_eth_principals
-//     }
-
-//     fn pending_requests_count(state: &State) -> usize {
-//         state.eth_transactions.withdrawal_requests_len()
-//     }
-// }
+impl RequestsGuardedByPrincipal for PendingRetrieveEthRequests {
+    fn guarded_principals(state: &mut State) -> &mut BTreeSet<Principal> {
+        &mut state.withdrawing_principals
+    }
+}
 
 /// Guards a block from executing twice when called by the same user and from being
 /// executed [MAX_CONCURRENT] or more times in parallel.
@@ -47,9 +40,6 @@ impl<PR: RequestsGuardedByPrincipal> Guard<PR> {
     /// are at least [MAX_CONCURRENT] pending requests.
     fn new(principal: Principal) -> Result<Self, GuardError> {
         mutate_state(|s| {
-            if PR::pending_requests_count(s) >= MAX_PENDING {
-                return Err(GuardError::TooManyPendingRequests);
-            }
             let principals = PR::guarded_principals(s);
             if principals.contains(&principal) {
                 return Err(GuardError::AlreadyProcessing);
@@ -72,12 +62,11 @@ impl<PR: RequestsGuardedByPrincipal> Drop for Guard<PR> {
     }
 }
 
-// TODO: this might be useless
-// pub fn retrieve_eth_guard(
-//     principal: Principal,
-// ) -> Result<Guard<PendingRetrieveEthRequests>, GuardError> {
-//     Guard::new(principal)
-// }
+pub fn retrieve_eth_guard(
+    principal: Principal,
+) -> Result<Guard<PendingRetrieveEthRequests>, GuardError> {
+    Guard::new(principal)
+}
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum TimerGuardError {
