@@ -8,7 +8,6 @@ use crate::state::event::EventType;
 use crate::state::{mutate_state, read_state, TaskType};
 use crate::utils::{HashMapUtils, VecUtils};
 
-use candid::Principal;
 use icrc_ledger_types::icrc1::transfer::Memo;
 use num_traits::ToPrimitive;
 use serde::Serialize;
@@ -81,6 +80,10 @@ async fn process_signature_range_with_limit(
     let mut before_signature = range.before_sol_sig.to_string();
     let until_signature = range.until_sol_sig.to_string();
 
+    let mut result: Vec<String> = Vec::new();
+    // include the first signature, call is not inclusive
+    result.push(before_signature.to_string());
+
     loop {
         ic_canister_log::log!(
             DEBUG,
@@ -101,21 +104,9 @@ async fn process_signature_range_with_limit(
 
                 // if signatures are available, we continue with the next chunk
                 // store the last signature to use it as before for the next chunk
-
-                // include the first signature, call is not inclusive
-                if before_signature == range.before_sol_sig {
-                    process_solana_signature(
-                        &SolanaSignature::new(before_signature.to_string()),
-                        None,
-                    )
-                }
-
                 let last_signature = signatures.last().unwrap();
                 before_signature = last_signature.signature.to_string();
-
-                signatures.iter().for_each(|s| {
-                    process_solana_signature(&SolanaSignature::new(s.signature.to_string()), None)
-                });
+                result.extend(signatures.iter().map(|s| s.signature.to_string()));
             }
             Err(error) => {
                 // if RPC call failed to get signatures, retry later
@@ -130,6 +121,10 @@ async fn process_signature_range_with_limit(
             }
         }
     }
+
+    result
+        .iter()
+        .for_each(|s| process_solana_signature(&SolanaSignature::new(s.to_string()), None));
 }
 
 pub async fn scrap_signatures() {
@@ -260,6 +255,13 @@ pub async fn mint_cksol() {
     };
 
     let (ledger_canister_id, events) = read_state(|s| (s.ledger_id, s.accepted_events.clone()));
+
+    ic_canister_log::log!(
+        DEBUG,
+        "Minting ckSOL: \n {:?}",
+        HashMapUtils::format_keys_as_string(&events)
+    );
+
     let client = ICRC1Client {
         runtime: CdkRuntime,
         ledger_canister_id,
@@ -273,10 +275,11 @@ pub async fn mint_cksol() {
                     owner: event.to_icp_address,
                     subaccount: None,
                 },
-                fee: None,
-                created_at_time: None,
-                memo: Some(event.clone().into()),
                 amount: candid::Nat::from(event.amount),
+                fee: None,
+                created_at_time: Some(ic_cdk::api::time()),
+                // Memo is limited to 32 bytes in size, so cant fit much in there
+                memo: None,
             })
             .await
         {
@@ -432,26 +435,16 @@ fn remove_solana_signature_range(range: &SolanaSignatureRange) {
     });
 }
 
-/// Types
+// Memo is limited to 32 bytes in size
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Serialize)]
-struct PartialReceivedSolEvent {
-    from_sol_address: String,
-    to_icp_address: Principal,
-    amount: u64,
-    sol_sig: String,
-}
+struct DepositMemo(String);
 
 impl From<ReceivedSolEvent> for Memo {
     fn from(event: ReceivedSolEvent) -> Self {
-        let partial_event = PartialReceivedSolEvent {
-            from_sol_address: event.from_sol_address,
-            to_icp_address: event.to_icp_address,
-            amount: event.amount,
-            sol_sig: event.sol_sig,
-        };
+        let partial_event = DepositMemo(event.from_sol_address);
 
-        let bytes = serde_cbor::ser::to_vec(&partial_event)
-            .expect("Failed to serialize PartialReceivedSolEvent");
+        let bytes =
+            serde_cbor::ser::to_vec(&partial_event).expect("Failed to serialize DepositMemo");
         Memo::from(bytes)
     }
 }

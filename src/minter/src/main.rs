@@ -30,6 +30,7 @@ fn setup_timers() {
             get_latest_signature().await;
             scrap_signature_range().await;
             scrap_signatures().await;
+            mint_cksol().await;
         });
     });
 

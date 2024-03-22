@@ -32,36 +32,36 @@ pub struct SolRpcClient {
 
 #[derive(Debug)]
 pub enum SolRcpError {
-    RequestFail(String),
-    JsonRpcFail(String),
-    FromUtf8Fail(String),
-    FromStringOfJsonFail(String),
-    ToStringOfJsonFail(String),
+    RequestFailed(String),
+    JsonRpcFailed(String),
+    FromUtf8Failed(String),
+    FromStringOfJsonFailed(String),
+    ToStringOfJsonFailed(String),
 }
 
 impl SolRcpError {
     pub fn new_request_fail(code: RejectionCode, msg: &str) -> Self {
-        SolRcpError::RequestFail(format!(
+        SolRcpError::RequestFailed(format!(
             "The http_request resulted into error. RejectionCode: {code:?}, Error: {msg}",
         ))
     }
 
     pub fn new_json_rpc_fail(code: i32, msg: &str) -> Self {
-        SolRcpError::JsonRpcFail(format!(
+        SolRcpError::JsonRpcFailed(format!(
             "Json response contains error. Code: {code:?}, Error: {msg}",
         ))
     }
 
     pub fn new_from_utf8_fail(err: &str) -> Self {
-        SolRcpError::FromUtf8Fail(format!("FromUtf8Error. {}", err))
+        SolRcpError::FromUtf8Failed(format!("{}", err))
     }
 
     pub fn new_from_string_of_json_fail(err: &str) -> Self {
-        SolRcpError::ToStringOfJsonFail(format!("FromStringOfJsonError. {}", err))
+        SolRcpError::FromStringOfJsonFailed(format!("{}", err))
     }
 
     pub fn new_to_string_of_json_fail(err: &str) -> Self {
-        SolRcpError::ToStringOfJsonFail(format!("ToStringOfJsonError. {}", err))
+        SolRcpError::ToStringOfJsonFailed(format!("{}", err))
     }
 }
 
@@ -155,8 +155,20 @@ impl SolRpcClient {
 
         match self.rpc_call(&payload, effective_size_estimate).await {
             Ok(response) => {
+                ic_canister_log::log!(
+                    crate::logs::DEBUG,
+                    "get_signatures_for_address: response: {:?}",
+                    response
+                );
+
                 let json_response =
                     serde_json::from_str::<JsonRpcResponse<Vec<SignatureResponse>>>(&response);
+
+                ic_canister_log::log!(
+                    crate::logs::DEBUG,
+                    "get_signatures_for_address: json_response: {:?}",
+                    json_response
+                );
 
                 // Check if the response is valid
                 match json_response {
@@ -216,6 +228,12 @@ impl SolRpcClient {
 
                 match json_responses {
                     Ok(responses) => {
+                        ic_canister_log::log!(
+                            crate::logs::DEBUG,
+                            "get_transactions: responses: {:?}",
+                            responses
+                        );
+
                         let mut map = HashMap::<
                             String,
                             Result<Option<GetTransactionResponse>, SolRcpError>,

@@ -155,25 +155,15 @@ impl Coupon {
     }
 }
 
+// Memo is limited to 32 bytes in size
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Serialize)]
-struct PartialWithdrawalEvent {
-    id: u64,
-    from_icp_address: Principal,
-    to_sol_address: String,
-    amount: u64,
-}
+struct WithdrawalMemo(String);
 
 impl From<WithdrawalEvent> for Memo {
     fn from(event: WithdrawalEvent) -> Self {
-        let partial_event = PartialWithdrawalEvent {
-            id: event.id,
-            from_icp_address: event.from_icp_address,
-            to_sol_address: event.to_sol_address,
-            amount: event.amount,
-        };
+        let memo = WithdrawalMemo(event.to_sol_address);
 
-        let bytes = serde_cbor::ser::to_vec(&partial_event)
-            .expect("Failed to serialize PartialWithdrawalEvent");
+        let bytes = serde_cbor::ser::to_vec(&memo).expect("Failed to serialize WithdrawalMemo");
         Memo::from(bytes)
     }
 }

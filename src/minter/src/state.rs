@@ -229,7 +229,7 @@ impl State {
         };
 
         assert!(
-            self.invalid_events.contains_key(key),
+            !self.invalid_events.contains_key(key),
             "Attempted to record existing invalid event: {key} ."
         );
 
@@ -263,8 +263,8 @@ impl State {
         };
 
         assert!(
-            self.minted_events.contains_key(key),
-            "Attempted to record existing minted event: {key}."
+            !self.minted_events.contains_key(key),
+            "Attempted to record existing minted event: {key}.",
         );
 
         _ = self.minted_events.insert(key.to_string(), deposit);
@@ -273,7 +273,7 @@ impl State {
     pub fn record_withdrawal_event(&mut self, withdrawal: WithdrawalEvent) {
         let key = withdrawal.id;
         assert!(
-            self.withdrawal_events.contains_key(&key),
+            !self.withdrawal_events.contains_key(&key),
             "Attempted to record existing withdrawal event: {key}."
         );
 

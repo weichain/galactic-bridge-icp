@@ -139,15 +139,28 @@ impl From<(&str, &str, &str)> for ReceivedSolEvent {
 
         let bytes = BASE64_STANDARD.decode(encode_data).unwrap();
 
+        ic_canister_log::log!(
+            crate::logs::DEBUG,
+            "ReceivedSolEvent::from: bytes: {:?}, from_address: {}, sol_sig: {}",
+            bytes,
+            from_address,
+            sol_sig
+        );
+
         let amount_bytes = &bytes[bytes.len() - 8..];
         let mut value: u64 = 0;
         for i in 0..8 {
             value |= (amount_bytes[i] as u64) << (i * 8);
         }
 
+        ic_canister_log::log!(crate::logs::DEBUG, "Value {}", value);
+
         let address_bytes = &bytes[12..bytes.len() - 8];
-        // String::from_utf8_lossy(&address_bytes);
-        let principal = Principal::from_bytes(std::borrow::Cow::Borrowed(address_bytes));
+
+        let address_hex = String::from_utf8_lossy(&address_bytes);
+        ic_canister_log::log!(crate::logs::DEBUG, "Address_bytes {}", address_hex);
+
+        let principal = Principal::from_text(address_hex).unwrap();
 
         ReceivedSolEvent {
             from_sol_address: from_address.to_string(),
