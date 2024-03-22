@@ -108,6 +108,16 @@ pub async fn get_address() -> (String, String) {
     read_state(|s| (s.compressed_public_key(), s.uncompressed_public_key()))
 }
 
+/// dfx canister call ledger icrc1_balance_of "(record {
+///   owner = principal \"$USER_PRINCIPAL\"
+/// })"
+///
+/// dfx canister call ledger icrc2_approve "(record {
+///   spender = record { owner = principal \"$(dfx canister id minter)\" };
+///   amount = 10_000_000;
+/// })" --identity $USER_PRINCIPAL_NAME
+///
+/// dfx canister call minter withdraw "(\"HS6NTv6GBVSLct8dsimRWRvjczJTAgfgDJt8VpR8wtGm\", 100_000)" --identity $USER_PRINCIPAL_NAME
 #[update]
 async fn withdraw(solana_address: String, withdraw_amount: candid::Nat) -> Result<Coupon, String> {
     let caller = validate_caller_not_anonymous();

@@ -434,17 +434,3 @@ fn remove_solana_signature_range(range: &SolanaSignatureRange) {
         process_event(s, EventType::RemoveSolanaSignatureRange(range.clone()));
     });
 }
-
-// Memo is limited to 32 bytes in size
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Serialize)]
-struct DepositMemo(String);
-
-impl From<ReceivedSolEvent> for Memo {
-    fn from(event: ReceivedSolEvent) -> Self {
-        let partial_event = DepositMemo(event.from_sol_address);
-
-        let bytes =
-            serde_cbor::ser::to_vec(&partial_event).expect("Failed to serialize DepositMemo");
-        Memo::from(bytes)
-    }
-}
