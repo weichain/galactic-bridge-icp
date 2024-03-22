@@ -90,6 +90,7 @@ pub async fn withdraw_cksol(from: Principal, to: String, amount: u64) -> Result<
 #[derive(CandidType, Serialize, Deserialize, Clone, Debug)]
 pub struct Coupon {
     pub message: String,
+    pub message_hash: String,
     pub signature_hex: String,
     pub icp_public_key_hex: String,
     pub recovery_id: Option<u8>,
@@ -97,9 +98,15 @@ pub struct Coupon {
 
 impl Coupon {
     // Constructor function to create a new Point instance
-    pub fn new(message: String, signature_hex: String, icp_public_key_hex: String) -> Self {
+    pub fn new(
+        message: String,
+        message_hash: String,
+        signature_hex: String,
+        icp_public_key_hex: String,
+    ) -> Self {
         Self {
             message,
+            message_hash,
             signature_hex,
             icp_public_key_hex,
             recovery_id: None,

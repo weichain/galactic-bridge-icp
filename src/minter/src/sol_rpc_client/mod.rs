@@ -1,6 +1,8 @@
 use crate::lifecycle::SolanaNetwork;
 use crate::sol_rpc_client::providers::{RpcNodeProvider, MAINNET_PROVIDERS, TESTNET_PROVIDERS};
-use crate::sol_rpc_client::requests::GetSignaturesForAddressRequest;
+use crate::sol_rpc_client::requests::{
+    GetSignaturesForAddressRequestOptions, GetTransactionRequestOptions,
+};
 use crate::sol_rpc_client::responses::{
     GetTransactionResponse, JsonRpcResponse, SignatureResponse,
 };
@@ -39,6 +41,7 @@ pub enum SolRcpError {
     ToStringOfJsonFailed(String),
 }
 
+// TODO: better examples in ledger code
 impl SolRcpError {
     pub fn new_request_fail(code: RejectionCode, msg: &str) -> Self {
         SolRcpError::RequestFailed(format!(
@@ -129,9 +132,9 @@ impl SolRpcClient {
     ) -> Result<Vec<SignatureResponse>, SolRcpError> {
         let params: [&dyn erased_serde::Serialize; 2] = [
             &read_state(|s| s.solana_contract_address.clone()),
-            &GetSignaturesForAddressRequest {
+            &GetSignaturesForAddressRequestOptions {
                 limit: Some(limit),
-                commitment: Some(ConfirmationStatus::Finalized.as_str().to_string()),
+                commitment: Some(ConfirmationStatus::Confirmed.as_str().to_string()),
                 before: before.map(|s| s.to_string()),
                 until: Some(until.to_string()),
             },
@@ -155,20 +158,8 @@ impl SolRpcClient {
 
         match self.rpc_call(&payload, effective_size_estimate).await {
             Ok(response) => {
-                ic_canister_log::log!(
-                    crate::logs::DEBUG,
-                    "get_signatures_for_address: response: {:?}",
-                    response
-                );
-
                 let json_response =
                     serde_json::from_str::<JsonRpcResponse<Vec<SignatureResponse>>>(&response);
-
-                ic_canister_log::log!(
-                    crate::logs::DEBUG,
-                    "get_signatures_for_address: json_response: {:?}",
-                    json_response
-                );
 
                 // Check if the response is valid
                 match json_response {
@@ -201,11 +192,18 @@ impl SolRpcClient {
         let mut rpc_request = Vec::new();
 
         for signature in &signatures {
+            let params: [&dyn erased_serde::Serialize; 2] = [
+                &signature,
+                &GetTransactionRequestOptions {
+                    commitment: Some(ConfirmationStatus::Confirmed.as_str().to_string()),
+                },
+            ];
+
             let transaction = json!({
                 "jsonrpc": "2.0",
                 "id": mutate_state(State::next_request_id),
                 "method": RpcMethod::GetTransaction.as_str().to_string(),
-                "params": [signature]
+                "params": params,
             });
             rpc_request.push(transaction);
         }
@@ -228,12 +226,6 @@ impl SolRpcClient {
 
                 match json_responses {
                     Ok(responses) => {
-                        ic_canister_log::log!(
-                            crate::logs::DEBUG,
-                            "get_transactions: responses: {:?}",
-                            responses
-                        );
-
                         let mut map = HashMap::<
                             String,
                             Result<Option<GetTransactionResponse>, SolRcpError>,

@@ -8,9 +8,7 @@ use crate::state::event::EventType;
 use crate::state::{mutate_state, read_state, TaskType};
 use crate::utils::{HashMapUtils, VecUtils};
 
-use icrc_ledger_types::icrc1::transfer::Memo;
 use num_traits::ToPrimitive;
-use serde::Serialize;
 use std::collections::HashMap;
 
 const GET_SIGNATURES_BY_ADDRESS_LIMIT: u64 = 10;
@@ -290,12 +288,14 @@ pub async fn mint_cksol() {
             }
             Ok(Err(err)) => {
                 let error_msg = &format!("Failed to mint ckSol: {event:?} {err}");
+                // TODO: this transition is wrong
                 process_accepted_event(&event, Some(error_msg));
             }
             Err(err) => {
                 let error_msg = &format!(
                     "Failed to send a message to the ledger ({ledger_canister_id}): {err:?}"
                 );
+                // TODO: this transition is wrong
                 process_accepted_event(&event, Some(error_msg));
             }
         };

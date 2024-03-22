@@ -108,13 +108,14 @@ pub async fn get_address() -> (String, String) {
     read_state(|s| (s.compressed_public_key(), s.uncompressed_public_key()))
 }
 
+// TODO:
 /// dfx canister call ledger icrc1_balance_of "(record {
 ///   owner = principal \"$USER_PRINCIPAL\"
 /// })"
 ///
 /// dfx canister call ledger icrc2_approve "(record {
 ///   spender = record { owner = principal \"$(dfx canister id minter)\" };
-///   amount = 10_000_000;
+///   amount = 1_000_000_000;
 /// })" --identity $USER_PRINCIPAL_NAME
 ///
 /// dfx canister call minter withdraw "(\"HS6NTv6GBVSLct8dsimRWRvjczJTAgfgDJt8VpR8wtGm\", 100_000)" --identity $USER_PRINCIPAL_NAME

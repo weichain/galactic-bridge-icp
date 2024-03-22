@@ -191,16 +191,21 @@ pub struct WithdrawalEvent {
 
 impl WithdrawalEvent {
     pub async fn to_coupon(&self) -> Coupon {
-        let (serialized_coupon, signature_hex) = self.sign_with_ecdsa().await;
+        let (serialized_coupon, message_hash, signature_hex) = self.sign_with_ecdsa().await;
         let icp_public_key_hex = crate::state::read_state(|s| s.uncompressed_public_key());
 
-        let mut response = Coupon::new(serialized_coupon, signature_hex, icp_public_key_hex);
+        let mut response = Coupon::new(
+            serialized_coupon,
+            message_hash,
+            signature_hex,
+            icp_public_key_hex,
+        );
         response.y_parity();
 
         response
     }
 
-    async fn sign_with_ecdsa(&self) -> (String, String) {
+    async fn sign_with_ecdsa(&self) -> (String, String, String) {
         // Serialize the coupon
         let serialized_coupon: String = serde_json::to_string(self).unwrap();
 
@@ -210,7 +215,7 @@ impl WithdrawalEvent {
         let hashed_coupon = hasher.finalize().to_vec();
 
         let args = SignWithEcdsaArgument {
-            message_hash: hashed_coupon,
+            message_hash: hashed_coupon.clone(),
             derivation_path: DERIVATION_PATH.into_iter().map(|x| x.to_vec()).collect(),
             key_id: EcdsaKeyId {
                 curve: EcdsaCurve::Secp256k1,
@@ -221,7 +226,11 @@ impl WithdrawalEvent {
             sign_with_ecdsa(args).await;
 
         match response {
-            Ok(res) => (serialized_coupon, hex::encode(&res.0.signature)),
+            Ok(res) => (
+                serialized_coupon,
+                hex::encode(hashed_coupon),
+                hex::encode(&res.0.signature),
+            ),
             Err((code, msg)) => {
                 panic!("Failed to sign_with_ecdsa: {:?}", (code, msg));
             }

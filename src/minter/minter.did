@@ -3,6 +3,7 @@ type Coupon = record {
   icp_public_key_hex : text;
   message : text;
   signature_hex : text;
+  message_hash : text;
 };
 type InitArg = record {
   ecdsa_key_name : text;
