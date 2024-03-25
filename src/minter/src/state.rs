@@ -1,10 +1,8 @@
 use crate::constants::DERIVATION_PATH;
 use crate::events::{DepositEvent, SolanaSignature, SolanaSignatureRange, WithdrawalEvent};
 use crate::lifecycle::{SolanaNetwork, UpgradeArg};
-use crate::logs::DEBUG;
 
 use candid::Principal;
-use ic_canister_log::log;
 use ic_cdk::api::management_canister::ecdsa::EcdsaPublicKeyResponse;
 use num_bigint::BigUint;
 use std::{
@@ -349,7 +347,10 @@ pub async fn lazy_call_ecdsa_public_key() -> ic_crypto_ecdsa_secp256k1::PublicKe
 
     let key_name = read_state(|s| s.ecdsa_key_name.clone());
 
-    log!(DEBUG, "Fetching the ECDSA public key {key_name}");
+    ic_canister_log::log!(
+        crate::logs::DEBUG,
+        "\nFetching the ECDSA public key {key_name}"
+    );
 
     let (response,) = ecdsa_public_key(EcdsaPublicKeyArgument {
         canister_id: None,

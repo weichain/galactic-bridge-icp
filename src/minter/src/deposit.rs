@@ -4,19 +4,62 @@ use crate::{
     },
     events::{DepositEvent, SolanaSignature, SolanaSignatureRange},
     guard::TimerGuard,
-    logs::DEBUG,
-    sol_rpc_client::{responses::GetTransactionResponse, LedgerMemo, SolRpcClient},
+    logs::{DEBUG, INFO},
+    sol_rpc_client::{responses::GetTransactionResponse, LedgerMemo, SolRpcClient, SolRpcError},
     state::audit::process_event,
     state::event::EventType,
     state::{mutate_state, read_state, State, TaskType},
     utils::{HashMapUtils, VecUtils},
 };
 
+use icrc_ledger_types::icrc1::transfer::TransferError;
 use num_traits::ToPrimitive;
 use std::collections::HashMap;
 
 const GET_SIGNATURES_BY_ADDRESS_LIMIT: u64 = 10;
 const GET_TRANSACTIONS_LIMIT: u64 = 5;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DepositError {
+    RpcCallFailed(SolRpcError),
+    SignatureFailed { sig: String, err: SolRpcError },
+    SignatureNotFound(String),
+    InvalidDepositData(String),
+    NonDepositTransaction(String),
+    MintingCkSolFailed(TransferError),
+    SendingMessageToLedgerFailed { id: String, code: i32, msg: String },
+}
+
+impl std::fmt::Display for DepositError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DepositError::RpcCallFailed(err) => {
+                write!(f, "{err:?}")
+            }
+            DepositError::SignatureFailed { sig, err } => {
+                write!(f, "Signature {sig} : failed with {err:?}")
+            }
+            DepositError::SignatureNotFound(sig) => {
+                write!(f, "Signature {sig} : transaction not found")
+            }
+            DepositError::InvalidDepositData(sig) => {
+                write!(f, "Signature {sig} : invalid deposit data")
+            }
+            DepositError::NonDepositTransaction(sig) => {
+                write!(f, "Signature {sig} : non-Deposit transaction found")
+            }
+            DepositError::MintingCkSolFailed(err) => {
+                write!(f, "Failed to mint ckSOL: {err:?}")
+            }
+            DepositError::SendingMessageToLedgerFailed { id, code, msg } => {
+                write!(
+                    f,
+                    "Failed to send a message to the ledger {id}: {code:?}: {msg}",
+                )
+            }
+        }
+    }
+}
 
 // fetch newest signature and push a new range to the state
 pub async fn get_latest_signature() {
@@ -25,7 +68,7 @@ pub async fn get_latest_signature() {
         Err(_) => return,
     };
 
-    ic_canister_log::log!(DEBUG, "Searching for new signatures ...");
+    ic_canister_log::log!(DEBUG, "\nSearching for new signatures ...");
 
     let until_signature = read_state(|s| s.get_solana_last_known_signature());
 
@@ -35,20 +78,19 @@ pub async fn get_latest_signature() {
         .await
     {
         Ok(signatures) => match signatures.len() {
-            0 => ic_canister_log::log!(DEBUG, "No new signatures found."),
+            0 => {
+                ic_canister_log::log!(DEBUG, "\nNo new signatures found")
+            }
             1 => {
                 let newest_sig = signatures[0].signature.to_string();
                 process_new_solana_signature_range(&newest_sig, &until_signature);
             }
             _ => {
-                ic_canister_log::log!(DEBUG, "Unexpected behaviour.",);
+                ic_canister_log::log!(INFO, "\nUnexpected behaviour",);
             }
         },
         Err(error) => {
-            ic_canister_log::log!(
-                DEBUG,
-                "Failed to get signatures for address. Error: {error:?}."
-            );
+            ic_canister_log::log!(INFO, "\nFailed to get signatures for address: {error:?}");
         }
     }
 }
@@ -69,7 +111,7 @@ pub async fn scrap_signature_range() {
 
     ic_canister_log::log!(
         DEBUG,
-        "Processing ranges: \n {:?}",
+        "\nProcessing ranges:\n{}",
         HashMapUtils::format_keys_as_string(&filtered_ranges)
     );
 
@@ -94,7 +136,7 @@ async fn process_signature_range_with_limit(
     loop {
         ic_canister_log::log!(
             DEBUG,
-            "Scanning range: before: {before_signature}, until: {until_signature} with limit: {limit} ...",
+            "\nScanning range:\n\tbefore: {before_signature}\n\tuntil: {until_signature}\n\tlimit: {limit}",
         );
 
         // get signatures for chunk
@@ -121,7 +163,7 @@ async fn process_signature_range_with_limit(
                     &range,
                     &before_signature,
                     &until_signature,
-                    &format!("{error:?}"),
+                    DepositError::RpcCallFailed(error),
                 );
 
                 break;
@@ -149,7 +191,7 @@ pub async fn scrap_signatures() {
 
     ic_canister_log::log!(
         DEBUG,
-        "Processing signatures: \n {:?}",
+        "\nProcessing signatures:\n{}",
         HashMapUtils::format_keys_as_string(&filtered_signatures)
     );
 
@@ -157,7 +199,7 @@ pub async fn scrap_signatures() {
 
     ic_canister_log::log!(
         DEBUG,
-        "Parsing transactions \n {:?}",
+        "\nProcessing transactions:\n{}",
         VecUtils::format_keys_as_string(&transactions)
     );
 
@@ -182,13 +224,17 @@ async fn process_signatures_with_limit(
                     let signature = signatures_map.get(&key).unwrap().clone();
 
                     match value {
-                        Err(error) => {
-                            let error_msg = format!("Signature: {key} -> Failed with {error:?}.");
-                            process_solana_signature(&signature, Some(&error_msg));
+                        Err(err) => {
+                            process_solana_signature(
+                                &signature,
+                                Some(DepositError::SignatureFailed { sig: key, err }),
+                            );
                         }
                         Ok(None) => {
-                            let error_msg = format!("Signature: {key} -> Transaction not found.");
-                            process_solana_signature(&signature, Some(&error_msg));
+                            process_solana_signature(
+                                &signature,
+                                Some(DepositError::SignatureNotFound(key)),
+                            );
                         }
                         Ok(Some(tx)) => {
                             transactions.push((signature, tx));
@@ -196,12 +242,11 @@ async fn process_signatures_with_limit(
                     }
                 }
             }
-            Err(error) => {
+            Err(err) => {
                 // if RPC call failed to get transactions, skip the transactions and retry later
-                let error_msg = format!("Failed to get transactions: {error:?}.");
-                chunk
-                    .iter()
-                    .for_each(|s| process_solana_signature(*s, Some(&error_msg)));
+                chunk.iter().for_each(|s| {
+                    process_solana_signature(*s, Some(DepositError::RpcCallFailed(err.clone())))
+                });
             }
         };
     }
@@ -216,13 +261,15 @@ fn parse_log_messages(transactions: &Vec<(SolanaSignature, GetTransactionRespons
                 process_accepted_event(&deposit, None);
             }
             Err(error) => {
-                process_invalid_event(signature, &error);
+                process_invalid_event(signature, error);
             }
         };
     }
 }
 
-fn process_transaction_logs(transaction: &GetTransactionResponse) -> Result<DepositEvent, String> {
+fn process_transaction_logs(
+    transaction: &GetTransactionResponse,
+) -> Result<DepositEvent, DepositError> {
     let deposit_msg = "Program log: Instruction: Deposit";
     let success_msg = &format!(
         "Program {} success",
@@ -245,12 +292,10 @@ fn process_transaction_logs(transaction: &GetTransactionResponse) -> Result<Depo
 
             return Ok(deposit);
         } else {
-            return Err(String::from(
-                "Deposit transaction found. Invalid deposit data.",
-            ));
+            return Err(DepositError::InvalidDepositData(signature.to_string()));
         }
     } else {
-        return Err(String::from("Non-Deposit transaction found."));
+        return Err(DepositError::NonDepositTransaction(signature.to_string()));
     }
 }
 
@@ -271,7 +316,7 @@ pub async fn mint_cksol() {
 
     ic_canister_log::log!(
         DEBUG,
-        "Minting ckSOL: \n {:?}",
+        "\nMinting ckSOL:\n{}",
         HashMapUtils::format_keys_as_string(&filtered_events)
     );
 
@@ -302,16 +347,17 @@ pub async fn mint_cksol() {
                 process_minted_event(&event);
             }
             Ok(Err(err)) => {
-                let error_msg = &format!("Failed to mint ckSol: {event:?} {err}");
-
-                process_accepted_event(&event, Some(error_msg));
+                process_accepted_event(&event, Some(DepositError::MintingCkSolFailed(err.clone())));
             }
             Err(err) => {
-                let error_msg = &format!(
-                    "Failed to send a message to the ledger ({ledger_canister_id}): {err:?}"
+                process_accepted_event(
+                    &event,
+                    Some(DepositError::SendingMessageToLedgerFailed {
+                        id: ledger_canister_id.to_string(),
+                        code: err.0,
+                        msg: err.1,
+                    }),
                 );
-
-                process_accepted_event(&event, Some(error_msg));
             }
         };
     }
@@ -321,7 +367,7 @@ pub async fn mint_cksol() {
 fn process_minted_event(event: &DepositEvent) {
     ic_canister_log::log!(
         DEBUG,
-        "Signature: {} -> Minted {} to {} in block {}",
+        "\nProcessed Signature: {}\n\tMinted amount: {}\n\tto {}\n\tin block {}",
         event.sol_sig,
         event.amount,
         event.to_icp_address,
@@ -338,13 +384,13 @@ fn process_minted_event(event: &DepositEvent) {
     });
 }
 
-fn process_accepted_event(event: &DepositEvent, error_msg: Option<&str>) {
-    if let Some(error_msg) = error_msg {
-        ic_canister_log::log!(DEBUG, "Signature: {} -> {}", event.sol_sig, error_msg);
+fn process_accepted_event(event: &DepositEvent, err: Option<DepositError>) {
+    if let Some(err) = err.clone() {
+        ic_canister_log::log!(DEBUG, "{err}");
     } else {
         ic_canister_log::log!(
             DEBUG,
-            "Signature: {} -> Deposit transaction found.",
+            "\nSignature {} : Deposit transaction found",
             event.sol_sig
         );
     }
@@ -354,32 +400,33 @@ fn process_accepted_event(event: &DepositEvent, error_msg: Option<&str>) {
             s,
             EventType::AcceptedEvent {
                 event_source: event.clone(),
-                fail_reason: error_msg.map(|s| s.to_string()),
+                fail_reason: err.map(|e| e.to_string()),
             },
         )
     });
 }
 
-fn process_invalid_event(signature: &SolanaSignature, error_msg: &str) {
-    ic_canister_log::log!(DEBUG, "Signature: {} -> {}.", signature.sol_sig, error_msg);
+fn process_invalid_event(signature: &SolanaSignature, err: DepositError) {
+    ic_canister_log::log!(DEBUG, "\nSignature {} : {err}", signature.sol_sig);
+
     mutate_state(|s| {
         process_event(
             s,
             EventType::InvalidEvent {
                 signature: signature.clone(),
-                fail_reason: error_msg.to_string(),
+                fail_reason: err.to_string(),
             },
         );
     });
 }
 
-fn process_solana_signature(signature: &SolanaSignature, error_msg: Option<&str>) {
-    if let Some(error_msg) = error_msg {
-        ic_canister_log::log!(DEBUG, "{}", error_msg);
+fn process_solana_signature(signature: &SolanaSignature, err: Option<DepositError>) {
+    if let Some(err) = err.clone() {
+        ic_canister_log::log!(DEBUG, "{err}");
     } else {
         ic_canister_log::log!(
-            DEBUG,
-            "Signature: {} -> Transaction found.",
+            INFO,
+            "\nSignature {} : Transaction found",
             signature.sol_sig
         );
     }
@@ -389,14 +436,14 @@ fn process_solana_signature(signature: &SolanaSignature, error_msg: Option<&str>
             s,
             EventType::SolanaSignature {
                 signature: signature.clone(),
-                fail_reason: error_msg.map(|s| s.to_string()),
+                fail_reason: err.map(|e| e.to_string()),
             },
         );
     });
 }
 
 fn process_new_solana_signature_range(newest_signature: &str, until_signature: &str) {
-    ic_canister_log::log!(DEBUG, "New signature found: {newest_signature:?}.",);
+    ic_canister_log::log!(DEBUG, "\nNew signature found: {newest_signature}",);
 
     mutate_state(|s| {
         process_event(
@@ -417,10 +464,10 @@ fn process_retry_solana_signature_range(
     range: &SolanaSignatureRange,
     before_signature: &str,
     until_signature: &str,
-    error: &str,
+    error: DepositError,
 ) {
-    let error_msg = format!("Failed to get signatures for address: before: {before_signature}, until: {until_signature}. Error: {error:?}.");
-    ic_canister_log::log!(DEBUG, "{}", error_msg);
+    let error_msg = format!("\nFailed to get signatures for address:\n\tbefore: {before_signature}\n\tuntil: {until_signature}\n\terror: {error:?}");
+    ic_canister_log::log!(DEBUG, "{error_msg}");
 
     mutate_state(|s| {
         process_event(
@@ -431,7 +478,7 @@ fn process_retry_solana_signature_range(
                     before_signature.to_string(),
                     until_signature.to_string(),
                 )),
-                fail_reason: error_msg.to_string(),
+                fail_reason: error_msg,
             },
         )
     });
@@ -440,7 +487,7 @@ fn process_retry_solana_signature_range(
 fn remove_solana_signature_range(range: &SolanaSignatureRange) {
     ic_canister_log::log!(
         DEBUG,
-        "Range completed: before: {}, until: {}.",
+        "\nRange completed:\n\tbefore: {}\n\tuntil: {}",
         range.before_sol_sig,
         range.until_sol_sig,
     );

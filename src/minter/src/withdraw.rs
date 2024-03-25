@@ -8,12 +8,38 @@ use crate::{
 use candid::CandidType;
 use candid::Principal;
 use icrc_ledger_client_cdk::{CdkRuntime, ICRC1Client};
-use icrc_ledger_types::icrc2::transfer_from::TransferFromArgs;
+use icrc_ledger_types::icrc2::transfer_from::{TransferFromArgs, TransferFromError};
 use k256::ecdsa::{signature::Verifier, RecoveryId, Signature, VerifyingKey};
 use num_traits::ToPrimitive;
 use serde::{Deserialize, Serialize};
 
-pub async fn withdraw_cksol(from: Principal, to: String, amount: u64) -> Result<Coupon, String> {
+#[derive(CandidType, Debug, Clone, PartialEq, Eq)]
+pub enum WithdrawError {
+    BurningCkSolFailed(TransferFromError),
+    SendingMessageToLedgerFailed { id: String, code: i32, msg: String },
+}
+
+impl std::fmt::Display for WithdrawError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            WithdrawError::BurningCkSolFailed(err) => {
+                write!(f, "Failed to burn ckSOL: {err:?}")
+            }
+            WithdrawError::SendingMessageToLedgerFailed { id, code, msg } => {
+                write!(
+                    f,
+                    "Failed to send a message to the ledger {id}: {code:?}: {msg}",
+                )
+            }
+        }
+    }
+}
+
+pub async fn withdraw_cksol(
+    from: Principal,
+    to: String,
+    amount: u64,
+) -> Result<Coupon, WithdrawError> {
     let _guard = retrieve_eth_guard(from).unwrap_or_else(|e| {
         ic_cdk::trap(&format!(
             "Failed retrieving guard for principal {}: {:?}",
@@ -72,16 +98,19 @@ pub async fn withdraw_cksol(from: Principal, to: String, amount: u64) -> Result<
             Ok(coupon)
         }
         Ok(Err(err)) => {
-            let error_msg = format!("[Withdraw] Failed to burn ckSOL: {err}");
-            ic_canister_log::log!(DEBUG, "{}", error_msg);
-            Err(error_msg)
+            let err = WithdrawError::BurningCkSolFailed(err);
+            ic_canister_log::log!(DEBUG, "{err}");
+            Err(err)
         }
         Err(err) => {
-            let error_msg = format!(
-                "[Withdraw] Failed to send a message to the ledger ({ledger_canister_id}): {err:?}"
-            );
-            ic_canister_log::log!(DEBUG, "{}", error_msg);
-            Err(error_msg)
+            let err = WithdrawError::SendingMessageToLedgerFailed {
+                id: ledger_canister_id.to_string(),
+                code: err.0,
+                msg: err.1,
+            };
+
+            ic_canister_log::log!(DEBUG, "{err}");
+            Err(err)
         }
     }
 }
@@ -130,8 +159,6 @@ impl Coupon {
             let recid = RecoveryId::try_from(parity).unwrap();
             let recovered_key = VerifyingKey::recover_from_msg(&message_bytes, &signature, recid)
                 .expect("failed to recover key");
-
-            ic_cdk::println!("parity: {}, recovered_key: {:?}", parity, recovered_key);
 
             if recovered_key.eq(&orig_key) {
                 self.recovery_id = Some(parity);

@@ -14,11 +14,26 @@ type InitArg = record {
   minimum_withdrawal_amount : nat;
 };
 type MinterArg = variant { Upgrade : UpgradeArg; Init : InitArg };
-type Result = variant { Ok : Coupon; Err : text };
+type Result = variant { Ok : Coupon; Err : WithdrawError };
 type SolanaNetwork = variant { Mainnet; Testnet };
+type TransferFromError = variant {
+  GenericError : record { message : text; error_code : nat };
+  TemporarilyUnavailable;
+  InsufficientAllowance : record { allowance : nat };
+  BadBurn : record { min_burn_amount : nat };
+  Duplicate : record { duplicate_of : nat };
+  BadFee : record { expected_fee : nat };
+  CreatedInFuture : record { ledger_time : nat64 };
+  TooOld;
+  InsufficientFunds : record { balance : nat };
+};
 type UpgradeArg = record {
   solana_contract_address : opt text;
   minimum_withdrawal_amount : opt nat;
+};
+type WithdrawError = variant {
+  BurningCkSolFailed : TransferFromError;
+  SendingMessageToLedgerFailed : record { id : text; msg : text; code : int32 };
 };
 service : (MinterArg) -> {
   get_active_tasks : () -> () query;

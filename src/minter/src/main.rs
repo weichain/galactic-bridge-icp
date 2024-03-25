@@ -9,7 +9,7 @@ use minter::{
     state::event::EventType,
     state::{lazy_call_ecdsa_public_key, read_state, State, STATE},
     storage,
-    withdraw::{withdraw_cksol, Coupon},
+    withdraw::{withdraw_cksol, Coupon, WithdrawError},
 };
 
 use candid::candid_method;
@@ -64,11 +64,11 @@ fn setup_timers() {
 pub fn init(args: MinterArg) {
     match args {
         MinterArg::Init(init_arg) => {
-            ic_canister_log::log!(INFO, "[init]: initialized minter with arg: {:?}", init_arg);
+            ic_canister_log::log!(INFO, "\ninitialized minter with arg:\n{init_arg:?}");
             STATE.with(|cell| {
                 storage::record_event(EventType::Init(init_arg.clone()));
                 *cell.borrow_mut() =
-                    Some(State::try_from(init_arg).expect("BUG: failed to initialize minter"))
+                    Some(State::try_from(init_arg).expect("failed to initialize minter"))
             });
         }
         MinterArg::Upgrade(_) => {
@@ -120,7 +120,10 @@ pub async fn get_address() -> (String, String) {
 ///
 /// dfx canister call minter withdraw "(\"HS6NTv6GBVSLct8dsimRWRvjczJTAgfgDJt8VpR8wtGm\", 100_000)" --identity $USER_PRINCIPAL_NAME
 #[update]
-async fn withdraw(solana_address: String, withdraw_amount: candid::Nat) -> Result<Coupon, String> {
+async fn withdraw(
+    solana_address: String,
+    withdraw_amount: candid::Nat,
+) -> Result<Coupon, WithdrawError> {
     let caller = validate_caller_not_anonymous();
 
     withdraw_cksol(
@@ -138,14 +141,14 @@ async fn withdraw(solana_address: String, withdraw_amount: candid::Nat) -> Resul
 // TODO: only for testing
 #[query]
 fn get_state() {
-    read_state(|s| ic_cdk::println!("state: {:?}", s));
+    read_state(|s| ic_canister_log::log!(INFO, "state: {:?}", s));
 }
 
 // dfx canister call minter get_active_tasks
 // TODO: only for testing
 #[query]
 fn get_active_tasks() {
-    read_state(|s| ic_cdk::println!("active_tasks: {:?}", s.active_tasks));
+    read_state(|s| ic_canister_log::log!(INFO, "active_tasks: {:?}", s.active_tasks));
 }
 
 #[query]

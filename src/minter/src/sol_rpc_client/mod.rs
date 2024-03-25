@@ -33,39 +33,34 @@ pub struct SolRpcClient {
     chain: SolanaNetwork,
 }
 
-#[derive(Debug)]
-pub enum SolRcpError {
-    RequestFailed(String),
-    JsonRpcFailed(String),
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SolRpcError {
+    RequestFailed { code: RejectionCode, msg: String },
+    JsonRpcFailed { code: i32, msg: String },
     FromUtf8Failed(String),
     FromStringOfJsonFailed(String),
     ToStringOfJsonFailed(String),
 }
 
-// TODO: better examples in ledger code
-impl SolRcpError {
-    pub fn new_request_fail(code: RejectionCode, msg: &str) -> Self {
-        SolRcpError::RequestFailed(format!(
-            "The http_request resulted into error. RejectionCode: {code:?}, Error: {msg}",
-        ))
-    }
-
-    pub fn new_json_rpc_fail(code: i32, msg: &str) -> Self {
-        SolRcpError::JsonRpcFailed(format!(
-            "Json response contains error. Code: {code:?}, Error: {msg}",
-        ))
-    }
-
-    pub fn new_from_utf8_fail(err: &str) -> Self {
-        SolRcpError::FromUtf8Failed(format!("{}", err))
-    }
-
-    pub fn new_from_string_of_json_fail(err: &str) -> Self {
-        SolRcpError::FromStringOfJsonFailed(format!("{}", err))
-    }
-
-    pub fn new_to_string_of_json_fail(err: &str) -> Self {
-        SolRcpError::ToStringOfJsonFailed(format!("{}", err))
+impl std::fmt::Display for SolRpcError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SolRpcError::RequestFailed { code, msg } => {
+                write!(f, "Request failed with code {:?}: {}", code, msg)
+            }
+            SolRpcError::JsonRpcFailed { code, msg } => {
+                write!(f, "JSON-RPC failed with code {:?}: {}", code, msg)
+            }
+            SolRpcError::FromUtf8Failed(err) => {
+                write!(f, "FromUtf8 failed: {}", err)
+            }
+            SolRpcError::FromStringOfJsonFailed(err) => {
+                write!(f, "From String of JSON failed: {}", err)
+            }
+            SolRpcError::ToStringOfJsonFailed(err) => {
+                write!(f, "To String of JSON failed: {}", err)
+            }
+        }
     }
 }
 
@@ -89,7 +84,7 @@ impl SolRpcClient {
         &self,
         payload: &String,
         effective_size_estimate: u64,
-    ) -> Result<String, SolRcpError> {
+    ) -> Result<String, SolRpcError> {
         // Details of the values used in the following lines can be found here:
         // https://internetcomputer.org/docs/current/developer-docs/production/computation-and-storage-costs
         let base_cycles = 400_000_000u128 + 100_000u128 * (2 * effective_size_estimate as u128);
@@ -116,10 +111,10 @@ impl SolRpcClient {
 
                 match str_body {
                     Ok(str_body) => Ok(str_body),
-                    Err(error) => Err(SolRcpError::new_from_utf8_fail(&error.to_string())),
+                    Err(error) => Err(SolRpcError::FromUtf8Failed(error.to_string())),
                 }
             }
-            Err((r, m)) => Err(SolRcpError::new_request_fail(r, &m)),
+            Err((r, m)) => Err(SolRpcError::RequestFailed { code: r, msg: m }),
         }
     }
 
@@ -130,7 +125,7 @@ impl SolRpcClient {
         limit: u64,
         before: Option<&String>,
         until: &String,
-    ) -> Result<Vec<SignatureResponse>, SolRcpError> {
+    ) -> Result<Vec<SignatureResponse>, SolRpcError> {
         let params: [&dyn erased_serde::Serialize; 2] = [
             &read_state(|s| s.solana_contract_address.clone()),
             &GetSignaturesForAddressRequestOptions {
@@ -148,7 +143,7 @@ impl SolRpcClient {
             "params": params
         }));
         let payload = if let Err(error) = payload {
-            return Err(SolRcpError::new_to_string_of_json_fail(&error.to_string()));
+            return Err(SolRpcError::ToStringOfJsonFailed(error.to_string()));
         } else {
             payload.unwrap()
         };
@@ -167,15 +162,16 @@ impl SolRpcClient {
                     Ok(json_response) => {
                         // In case error is present in the response ignore the result and return the error
                         if let Some(error) = json_response.error {
-                            Err(SolRcpError::new_json_rpc_fail(error.code, &error.message))
+                            Err(SolRpcError::JsonRpcFailed {
+                                code: error.code,
+                                msg: error.message,
+                            })
                         } else {
                             Ok(json_response.result.unwrap())
                         }
                     }
                     Err(error) => {
-                        return Err(SolRcpError::new_from_string_of_json_fail(
-                            &error.to_string(),
-                        ))
+                        return Err(SolRpcError::FromStringOfJsonFailed(error.to_string()))
                     }
                 }
             }
@@ -194,7 +190,7 @@ impl SolRpcClient {
     pub async fn get_transactions(
         &self,
         signatures: Vec<&String>,
-    ) -> Result<HashMap<String, Result<Option<GetTransactionResponse>, SolRcpError>>, SolRcpError>
+    ) -> Result<HashMap<String, Result<Option<GetTransactionResponse>, SolRpcError>>, SolRpcError>
     {
         let mut rpc_request = Vec::new();
 
@@ -221,7 +217,7 @@ impl SolRpcClient {
 
         let payload = serde_json::to_string(&rpc_request);
         let payload = if let Err(error) = payload {
-            return Err(SolRcpError::new_to_string_of_json_fail(&error.to_string()));
+            return Err(SolRpcError::ToStringOfJsonFailed(error.to_string()));
         } else {
             payload.unwrap()
         };
@@ -239,7 +235,7 @@ impl SolRpcClient {
                     Ok(responses) => {
                         let mut map = HashMap::<
                             String,
-                            Result<Option<GetTransactionResponse>, SolRcpError>,
+                            Result<Option<GetTransactionResponse>, SolRpcError>,
                         >::new();
 
                         responses
@@ -248,7 +244,10 @@ impl SolRpcClient {
                             .for_each(|(index, response)| {
                                 // In case error is present in the response ignore the result and return the error
                                 let result = if let Some(error) = response.error {
-                                    Err(SolRcpError::new_json_rpc_fail(error.code, &error.message))
+                                    Err(SolRpcError::JsonRpcFailed {
+                                        code: error.code,
+                                        msg: error.message,
+                                    })
                                 } else {
                                     Ok(response.result)
                                 };
@@ -258,9 +257,7 @@ impl SolRpcClient {
 
                         Ok(map)
                     }
-                    Err(error) => Err(SolRcpError::new_from_string_of_json_fail(
-                        &error.to_string(),
-                    )),
+                    Err(error) => Err(SolRpcError::FromStringOfJsonFailed(error.to_string())),
                 }
             }
             Err(error) => return Err(error),
