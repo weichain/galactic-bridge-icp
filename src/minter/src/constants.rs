@@ -1,6 +1,5 @@
-use std::time::Duration;
-
 use serde_bytes::ByteBuf;
+use std::time::Duration;
 
 // The derivation path to use for ECDSA secp256k1.
 // First component: Hardened derivation for purpose (44')
@@ -19,3 +18,7 @@ pub const GET_LATEST_SOLANA_SIGNATURE: Duration = Duration::from_secs(1 * 60);
 pub const SCRAPPING_SOLANA_SIGNATURE_RANGES: Duration = Duration::from_secs(3 * 60);
 pub const SCRAPPING_SOLANA_SIGNATURES: Duration = Duration::from_secs(3 * 60);
 pub const MINT_CKSOL: Duration = Duration::from_secs(3 * 60);
+
+pub const SOLANA_SIGNATURE_RANGES_RETRY_LIMIT: u8 = 100;
+pub const SOLANA_SIGNATURE_RETRY_LIMIT: u8 = 100;
+pub const MINT_CKSOL_RETRY_LIMIT: u8 = 100;

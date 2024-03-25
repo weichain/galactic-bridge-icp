@@ -1,4 +1,7 @@
 use crate::{
+    constants::{
+        MINT_CKSOL_RETRY_LIMIT, SOLANA_SIGNATURE_RANGES_RETRY_LIMIT, SOLANA_SIGNATURE_RETRY_LIMIT,
+    },
     events::{DepositEvent, SolanaSignature, SolanaSignatureRange},
     guard::TimerGuard,
     logs::DEBUG,
@@ -57,15 +60,20 @@ pub async fn scrap_signature_range() {
     };
 
     let rpc_client = read_state(SolRpcClient::from_state);
-    let ranges_map = read_state(|s| s.solana_signature_ranges.clone());
+    // filter out all events that have reached the retry limit
+    let filtered_ranges =
+        HashMapUtils::filter(&read_state(|s| s.solana_signature_ranges.clone()), |s| {
+            !s.retry
+                .is_retry_limit_reached(SOLANA_SIGNATURE_RANGES_RETRY_LIMIT)
+        });
 
     ic_canister_log::log!(
         DEBUG,
-        "Known ranges: \n {:?}",
-        HashMapUtils::format_keys_as_string(&ranges_map)
+        "Processing ranges: \n {:?}",
+        HashMapUtils::format_keys_as_string(&filtered_ranges)
     );
 
-    for (_, v) in &ranges_map {
+    for (_, v) in &filtered_ranges {
         process_signature_range_with_limit(&rpc_client, v.clone(), None).await;
     }
 }
@@ -133,15 +141,19 @@ pub async fn scrap_signatures() {
     };
 
     let rpc_client = read_state(SolRpcClient::from_state);
-    let signatures_map = &read_state(|s| s.solana_signatures.clone());
+    // filter out all events that have reached the retry limit
+    let filtered_signatures =
+        HashMapUtils::filter(&read_state(|s| s.solana_signatures.clone()), |s| {
+            !s.retry.is_retry_limit_reached(SOLANA_SIGNATURE_RETRY_LIMIT)
+        });
 
     ic_canister_log::log!(
         DEBUG,
-        "Known signatures: \n {:?}",
-        HashMapUtils::format_keys_as_string(&signatures_map)
+        "Processing signatures: \n {:?}",
+        HashMapUtils::format_keys_as_string(&filtered_signatures)
     );
 
-    let transactions = process_signatures_with_limit(&rpc_client, signatures_map, None).await;
+    let transactions = process_signatures_with_limit(&rpc_client, &filtered_signatures, None).await;
 
     ic_canister_log::log!(
         DEBUG,
@@ -251,12 +263,16 @@ pub async fn mint_cksol() {
         Err(_) => return,
     };
 
-    let (ledger_canister_id, events) = read_state(|s| (s.ledger_id, s.accepted_events.clone()));
+    let ledger_canister_id = read_state(|s| s.ledger_id);
+    // filter out all events that have reached the retry limit
+    let filtered_events = HashMapUtils::filter(&read_state(|s| s.accepted_events.clone()), |e| {
+        !e.retry.is_retry_limit_reached(MINT_CKSOL_RETRY_LIMIT)
+    });
 
     ic_canister_log::log!(
         DEBUG,
         "Minting ckSOL: \n {:?}",
-        HashMapUtils::format_keys_as_string(&events)
+        HashMapUtils::format_keys_as_string(&filtered_events)
     );
 
     let client = ICRC1Client {
@@ -264,7 +280,7 @@ pub async fn mint_cksol() {
         ledger_canister_id,
     };
 
-    for (_, mut event) in events {
+    for (_, mut event) in filtered_events {
         match client
             .transfer(TransferArg {
                 from_subaccount: None,
@@ -287,14 +303,14 @@ pub async fn mint_cksol() {
             }
             Ok(Err(err)) => {
                 let error_msg = &format!("Failed to mint ckSol: {event:?} {err}");
-                // TODO: this transition is wrong
+
                 process_accepted_event(&event, Some(error_msg));
             }
             Err(err) => {
                 let error_msg = &format!(
                     "Failed to send a message to the ledger ({ledger_canister_id}): {err:?}"
                 );
-                // TODO: this transition is wrong
+
                 process_accepted_event(&event, Some(error_msg));
             }
         };

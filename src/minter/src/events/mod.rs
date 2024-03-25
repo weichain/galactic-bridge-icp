@@ -12,10 +12,25 @@ use minicbor::{Decode, Encode};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
-pub trait Retriable {
-    fn get_retries(&self) -> u8;
-    fn increment_retries(&mut self);
-    fn reset_retries(&mut self);
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Encode, Decode, Serialize)]
+pub struct Retriable(#[n(0)] u8);
+
+impl Retriable {
+    pub fn get_retries(&self) -> u8 {
+        self.0
+    }
+
+    pub fn increment_retries(&mut self) {
+        self.0 += 1;
+    }
+
+    pub fn reset_retries(&mut self) {
+        self.0 = 0;
+    }
+
+    pub fn is_retry_limit_reached(&self, limit: u8) -> bool {
+        self.get_retries() >= limit
+    }
 }
 
 #[derive(Debug, Encode, Decode, PartialEq, Clone, Eq)]
@@ -25,7 +40,7 @@ pub struct SolanaSignatureRange {
     #[n(1)]
     pub until_sol_sig: String,
     #[n(2)]
-    retries: u8,
+    pub retry: Retriable,
 }
 
 impl SolanaSignatureRange {
@@ -34,22 +49,8 @@ impl SolanaSignatureRange {
         SolanaSignatureRange {
             before_sol_sig: before,
             until_sol_sig: until,
-            retries: 0,
+            retry: Retriable(0),
         }
-    }
-}
-
-impl Retriable for SolanaSignatureRange {
-    fn get_retries(&self) -> u8 {
-        self.retries
-    }
-
-    fn increment_retries(&mut self) {
-        self.retries += 1;
-    }
-
-    fn reset_retries(&mut self) {
-        self.retries = 0;
     }
 }
 
@@ -58,7 +59,7 @@ pub struct SolanaSignature {
     #[n(0)]
     pub sol_sig: String,
     #[n(1)]
-    retries: u8,
+    pub retry: Retriable,
 }
 
 impl SolanaSignature {
@@ -66,7 +67,7 @@ impl SolanaSignature {
     pub fn new(signature: String) -> Self {
         SolanaSignature {
             sol_sig: signature,
-            retries: 0,
+            retry: Retriable(0),
         }
     }
 }
@@ -74,20 +75,6 @@ impl SolanaSignature {
 impl std::fmt::Display for SolanaSignature {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.sol_sig)
-    }
-}
-
-impl Retriable for SolanaSignature {
-    fn get_retries(&self) -> u8 {
-        self.retries
-    }
-
-    fn increment_retries(&mut self) {
-        self.retries += 1;
-    }
-
-    fn reset_retries(&mut self) {
-        self.retries = 0;
     }
 }
 
@@ -104,7 +91,7 @@ pub struct DepositEvent {
     #[n(4)]
     icp_mint_block_index: Option<u64>,
     #[n(5)]
-    retries: u8,
+    pub retry: Retriable,
 }
 
 impl DepositEvent {
@@ -114,20 +101,6 @@ impl DepositEvent {
 
     pub fn get_mint_block_index(&self) -> Option<u64> {
         self.icp_mint_block_index
-    }
-}
-
-impl Retriable for DepositEvent {
-    fn get_retries(&self) -> u8 {
-        self.retries
-    }
-
-    fn increment_retries(&mut self) {
-        self.retries += 1;
-    }
-
-    fn reset_retries(&mut self) {
-        self.retries = 0;
     }
 }
 
@@ -143,13 +116,8 @@ impl From<(&str, &str, &str)> for DepositEvent {
             value |= (amount_bytes[i] as u64) << (i * 8);
         }
 
-        ic_canister_log::log!(crate::logs::DEBUG, "Value {}", value);
-
         let address_bytes = &bytes[12..bytes.len() - 8];
-
         let address_hex = String::from_utf8_lossy(&address_bytes);
-        ic_canister_log::log!(crate::logs::DEBUG, "Address_bytes {}", address_hex);
-
         let principal = Principal::from_text(address_hex).unwrap();
 
         DepositEvent {
@@ -158,7 +126,7 @@ impl From<(&str, &str, &str)> for DepositEvent {
             amount: value,
             sol_sig: sol_sig.to_string(),
             icp_mint_block_index: None,
-            retries: 0,
+            retry: Retriable(0),
         }
     }
 }

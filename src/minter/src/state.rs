@@ -1,7 +1,5 @@
 use crate::constants::DERIVATION_PATH;
-use crate::events::{
-    DepositEvent, Retriable, SolanaSignature, SolanaSignatureRange, WithdrawalEvent,
-};
+use crate::events::{DepositEvent, SolanaSignature, SolanaSignatureRange, WithdrawalEvent};
 use crate::lifecycle::{SolanaNetwork, UpgradeArg};
 use crate::logs::DEBUG;
 
@@ -147,6 +145,7 @@ impl State {
         self.solana_network
     }
 
+    // STATE TRASNFORMATIONS
     pub fn record_solana_last_known_signature(&mut self, sig: &String) {
         self.solana_last_known_signature = Some(sig.to_string());
     }
@@ -187,7 +186,7 @@ impl State {
                     }
                     None => {
                         // in case range exists, increment the retries
-                        old_range.increment_retries();
+                        old_range.retry.increment_retries();
                         self.solana_signature_ranges
                             .insert(old_key.to_string(), old_range);
                     }
@@ -212,7 +211,7 @@ impl State {
                 // if it exists - increment the retries
                 let mut existing_signature = self.solana_signatures.remove(&sig.sol_sig).unwrap();
 
-                existing_signature.increment_retries();
+                existing_signature.retry.increment_retries();
                 self.solana_signatures
                     .insert(sig.sol_sig.to_string(), existing_signature);
             }
@@ -223,7 +222,7 @@ impl State {
         }
     }
 
-    pub fn record_invalid_event(&mut self, sig: SolanaSignature) {
+    pub fn record_invalid_event(&mut self, mut sig: SolanaSignature) {
         let key = &sig.sol_sig;
 
         match self.solana_signatures.remove(key) {
@@ -236,6 +235,7 @@ impl State {
             "Attempted to record existing invalid event: {key} ."
         );
 
+        sig.retry.reset_retries();
         self.invalid_events.insert(key.to_string(), sig);
     }
 
@@ -260,13 +260,13 @@ impl State {
             true => {
                 let mut existing_event = self.accepted_events.remove(key).unwrap();
                 // increment retries
-                existing_event.increment_retries();
+                existing_event.retry.increment_retries();
                 self.accepted_events.insert(key.to_string(), existing_event);
             }
         };
     }
 
-    pub fn record_minted_event(&mut self, deposit: DepositEvent) {
+    pub fn record_minted_event(&mut self, mut deposit: DepositEvent) {
         let key = &deposit.sol_sig;
 
         _ = match self.accepted_events.remove(key) {
@@ -279,6 +279,7 @@ impl State {
             "Attempted to record existing minted event: {key}.",
         );
 
+        deposit.retry.reset_retries();
         _ = self.minted_events.insert(key.to_string(), deposit);
     }
 
