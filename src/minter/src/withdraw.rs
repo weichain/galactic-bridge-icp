@@ -1,14 +1,14 @@
 use crate::{
-    events::WithdrawalEvent,
     guard::retrieve_eth_guard,
     logs::DEBUG,
+    sol_rpc_client::LedgerMemo,
     state::{audit::process_event, event::EventType, mutate_state, read_state, State},
 };
 
 use candid::CandidType;
 use candid::Principal;
 use icrc_ledger_client_cdk::{CdkRuntime, ICRC1Client};
-use icrc_ledger_types::{icrc1::transfer::Memo, icrc2::transfer_from::TransferFromArgs};
+use icrc_ledger_types::icrc2::transfer_from::TransferFromArgs;
 use k256::ecdsa::{signature::Verifier, RecoveryId, Signature, VerifyingKey};
 use num_traits::ToPrimitive;
 use serde::{Deserialize, Serialize};
@@ -22,7 +22,7 @@ pub async fn withdraw_cksol(from: Principal, to: String, amount: u64) -> Result<
     });
 
     let ledger_canister_id = read_state(|s| s.ledger_id);
-    let withdrawal_id = mutate_state(State::next_withdrawal_id);
+    let withdrawal_id = mutate_state(State::next_burn_id);
     let client = ICRC1Client {
         runtime: CdkRuntime,
         ledger_canister_id,
@@ -44,7 +44,7 @@ pub async fn withdraw_cksol(from: Principal, to: String, amount: u64) -> Result<
         amount: candid::Nat::from(amount),
         fee: None,
         created_at_time: Some(ic_cdk::api::time()),
-        memo: Some(withdraw_event.clone().into()),
+        memo: Some(LedgerMemo(mutate_state(State::next_burn_id)).into()),
     };
 
     match client.transfer_from(args).await {
@@ -159,18 +159,5 @@ impl Coupon {
             .expect("failed to deserialize sec1 encoding into public key")
             .verify(message_bytes, &signature)
             .is_ok()
-    }
-}
-
-// Memo is limited to 32 bytes in size
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Serialize)]
-struct WithdrawalMemo(u64);
-
-impl From<WithdrawalEvent> for Memo {
-    fn from(event: WithdrawalEvent) -> Self {
-        let memo = WithdrawalMemo(event.id);
-
-        let bytes = serde_cbor::ser::to_vec(&memo).expect("Failed to serialize WithdrawalMemo");
-        Memo::from(bytes)
     }
 }

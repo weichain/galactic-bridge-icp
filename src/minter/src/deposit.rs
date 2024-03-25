@@ -1,12 +1,13 @@
-use crate::events::{ReceivedSolEvent, SolanaSignature, SolanaSignatureRange};
-use crate::guard::TimerGuard;
-use crate::logs::DEBUG;
-use crate::sol_rpc_client::responses::GetTransactionResponse;
-use crate::sol_rpc_client::SolRpcClient;
-use crate::state::audit::process_event;
-use crate::state::event::EventType;
-use crate::state::{mutate_state, read_state, TaskType};
-use crate::utils::{HashMapUtils, VecUtils};
+use crate::{
+    events::{ReceivedSolEvent, SolanaSignature, SolanaSignatureRange},
+    guard::TimerGuard,
+    logs::DEBUG,
+    sol_rpc_client::{responses::GetTransactionResponse, LedgerMemo, SolRpcClient},
+    state::audit::process_event,
+    state::event::EventType,
+    state::{mutate_state, read_state, State, TaskType},
+    utils::{HashMapUtils, VecUtils},
+};
 
 use num_traits::ToPrimitive;
 use std::collections::HashMap;
@@ -277,7 +278,7 @@ pub async fn mint_cksol() {
                 fee: None,
                 created_at_time: Some(ic_cdk::api::time()),
                 // Memo is limited to 32 bytes in size, so cant fit much in there
-                memo: None,
+                memo: Some(LedgerMemo(mutate_state(State::next_mint_id)).into()),
             })
             .await
         {

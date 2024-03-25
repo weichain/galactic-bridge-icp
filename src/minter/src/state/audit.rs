@@ -35,7 +35,7 @@ pub fn apply_state_transition(state: &mut State, payload: &EventType) {
             signature,
             fail_reason: _,
         } => {
-            state.record_solana_signature(signature.clone());
+            state.record_or_retry_solana_signature(signature.clone());
         }
         EventType::InvalidEvent {
             signature,
@@ -47,7 +47,7 @@ pub fn apply_state_transition(state: &mut State, payload: &EventType) {
             event_source,
             fail_reason: _,
         } => {
-            state.record_accepted_event(event_source.clone());
+            state.record_or_retry_accepted_event(event_source.clone());
         }
         EventType::MintedEvent { event_source } => {
             state.record_minted_event(event_source.clone());

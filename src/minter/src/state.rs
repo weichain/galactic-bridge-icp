@@ -70,11 +70,14 @@ pub struct State {
 
     // Withdrawal requests that are currently being processed
     pub withdrawing_principals: BTreeSet<Principal>,
-    // Unique identifier for each withdrawal
-    pub withdrawal_id_counter: u64,
+
+    // Unique identifier for each mint call to ledger
+    pub mint_id_counter: u64,
+
+    // Unique identifier for each burn call to ledger
+    pub burn_id_counter: u64,
 
     /// Number of HTTP outcalls since the last upgrade.
-    /// Used to correlate request and response in logs.
     pub http_request_counter: u64,
 
     /// Locks preventing concurrent execution timer tasks
@@ -203,7 +206,7 @@ impl State {
         };
     }
 
-    pub fn record_solana_signature(&mut self, sig: SolanaSignature) {
+    pub fn record_or_retry_solana_signature(&mut self, sig: SolanaSignature) {
         match self.solana_signatures.contains_key(&sig.sol_sig) {
             true => {
                 // if it exists - increment the retries
@@ -236,21 +239,30 @@ impl State {
         self.invalid_events.insert(key.to_string(), sig);
     }
 
-    pub fn record_accepted_event(&mut self, deposit: ReceivedSolEvent) {
+    pub fn record_or_retry_accepted_event(&mut self, deposit: ReceivedSolEvent) {
         let key = &deposit.sol_sig;
 
-        match self.solana_signatures.remove(key) {
-            Some(event) => event,
-            None => panic!("Attempted to remove NON existing solana signature {key} ."),
-        };
-
         match self.accepted_events.contains_key(key) {
+            // new event
+            false => {
+                // remove signature
+                match self.solana_signatures.remove(key) {
+                    // if signature exists
+                    Some(_) => {
+                        // add accepted event
+                        self.accepted_events.insert(key.to_string(), deposit);
+                    }
+                    // if signature doesn't exist -> something whet wrong
+                    None => panic!("Attempted to remove NON existing solana signature {key} ."),
+                };
+            }
+            // retrying accepted event
             true => {
                 let mut existing_event = self.accepted_events.remove(key).unwrap();
+                // increment retries
                 existing_event.increment_retries();
-                self.accepted_events.insert(key.to_string(), existing_event)
+                self.accepted_events.insert(key.to_string(), existing_event);
             }
-            false => self.accepted_events.insert(key.to_string(), deposit),
         };
     }
 
@@ -288,9 +300,15 @@ impl State {
         current_request_id
     }
 
-    pub fn next_withdrawal_id(&mut self) -> u64 {
-        let current_withdrawal_id = self.withdrawal_id_counter;
-        self.withdrawal_id_counter = self.withdrawal_id_counter.wrapping_add(1);
+    pub fn next_mint_id(&mut self) -> u64 {
+        let current_mint_id = self.mint_id_counter;
+        self.mint_id_counter = self.mint_id_counter.wrapping_add(1);
+        current_mint_id
+    }
+
+    pub fn next_burn_id(&mut self) -> u64 {
+        let current_withdrawal_id = self.burn_id_counter;
+        self.burn_id_counter = self.burn_id_counter.wrapping_add(1);
         current_withdrawal_id
     }
 }

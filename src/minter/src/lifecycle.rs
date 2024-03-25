@@ -54,7 +54,8 @@ impl TryFrom<InitArg> for State {
             minted_events: Default::default(),
             withdrawal_events: Default::default(),
             withdrawing_principals: Default::default(),
-            withdrawal_id_counter: 0,
+            burn_id_counter: 0,
+            mint_id_counter: 0,
             http_request_counter: 0,
             active_tasks: Default::default(),
         };

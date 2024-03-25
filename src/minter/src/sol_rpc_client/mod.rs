@@ -1,16 +1,17 @@
-use crate::lifecycle::SolanaNetwork;
-use crate::sol_rpc_client::providers::{RpcNodeProvider, MAINNET_PROVIDERS, TESTNET_PROVIDERS};
-use crate::sol_rpc_client::requests::{
-    GetSignaturesForAddressRequestOptions, GetTransactionRequestOptions,
+use crate::{
+    events::WithdrawalEvent,
+    lifecycle::SolanaNetwork,
+    sol_rpc_client::providers::{RpcNodeProvider, MAINNET_PROVIDERS, TESTNET_PROVIDERS},
+    sol_rpc_client::requests::{
+        GetSignaturesForAddressRequestOptions, GetTransactionRequestOptions,
+    },
+    sol_rpc_client::responses::{GetTransactionResponse, JsonRpcResponse, SignatureResponse},
+    sol_rpc_client::types::{
+        ConfirmationStatus, RpcMethod, HEADER_SIZE_LIMIT, SIGNATURE_RESPONSE_SIZE_ESTIMATE,
+        TRANSACTION_RESPONSE_SIZE_ESTIMATE,
+    },
+    state::{mutate_state, read_state, State},
 };
-use crate::sol_rpc_client::responses::{
-    GetTransactionResponse, JsonRpcResponse, SignatureResponse,
-};
-use crate::sol_rpc_client::types::{
-    ConfirmationStatus, RpcMethod, HEADER_SIZE_LIMIT, SIGNATURE_RESPONSE_SIZE_ESTIMATE,
-    TRANSACTION_RESPONSE_SIZE_ESTIMATE,
-};
-use crate::state::{mutate_state, read_state, State};
 
 use ic_cdk::api::{
     call::RejectionCode,
@@ -18,6 +19,7 @@ use ic_cdk::api::{
         http_request, CanisterHttpRequestArgument, HttpHeader, HttpMethod,
     },
 };
+use icrc_ledger_types::icrc1::transfer::Memo;
 use serde_json::json;
 use std::collections::HashMap;
 
@@ -184,6 +186,12 @@ impl SolRpcClient {
 
     // Method relies on the gettransaction RPC call to get the transaction data:
     // https://solana.com/docs/rpc/http/gettransaction
+    // It is using a batch request to get multiple transactions at once.
+    // cURL Example:
+    // curl -X POST -H "Content-Type: application/json" -d '[
+    //    {"jsonrpc":"2.0","id":1,"method":"getTransaction","params":["1"]}
+    //    {"jsonrpc":"2.0","id":2,"method":"getTransaction","params":["2"]}
+    // ]' http://localhost:8899
     pub async fn get_transactions(
         &self,
         signatures: Vec<&String>,
@@ -191,7 +199,11 @@ impl SolRpcClient {
     {
         let mut rpc_request = Vec::new();
 
-        for signature in &signatures {
+        // Due to batching request_id cannot be used in the payload.
+        // But still need to increment it to count the call.
+        mutate_state(State::next_request_id);
+
+        for (position, signature) in signatures.iter().enumerate() {
             let params: [&dyn erased_serde::Serialize; 2] = [
                 &signature,
                 &GetTransactionRequestOptions {
@@ -201,7 +213,7 @@ impl SolRpcClient {
 
             let transaction = json!({
                 "jsonrpc": "2.0",
-                "id": mutate_state(State::next_request_id),
+                "id": position + 1,
                 "method": RpcMethod::GetTransaction.as_str().to_string(),
                 "params": params,
             });
@@ -254,5 +266,16 @@ impl SolRpcClient {
             }
             Err(error) => return Err(error),
         }
+    }
+}
+
+// Memo is limited to 32 bytes in size
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, serde::Serialize)]
+pub struct LedgerMemo(pub u64);
+
+impl From<LedgerMemo> for Memo {
+    fn from(memo: LedgerMemo) -> Self {
+        let bytes = serde_cbor::ser::to_vec(&memo).expect("Failed to serialize LedgerMemo");
+        Memo::from(bytes)
     }
 }
