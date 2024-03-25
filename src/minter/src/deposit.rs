@@ -1,5 +1,5 @@
 use crate::{
-    events::{ReceivedSolEvent, SolanaSignature, SolanaSignatureRange},
+    events::{DepositEvent, SolanaSignature, SolanaSignatureRange},
     guard::TimerGuard,
     logs::DEBUG,
     sol_rpc_client::{responses::GetTransactionResponse, LedgerMemo, SolRpcClient},
@@ -210,9 +210,7 @@ fn parse_log_messages(transactions: &Vec<(SolanaSignature, GetTransactionRespons
     }
 }
 
-fn process_transaction_logs(
-    transaction: &GetTransactionResponse,
-) -> Result<ReceivedSolEvent, String> {
+fn process_transaction_logs(transaction: &GetTransactionResponse) -> Result<DepositEvent, String> {
     let deposit_msg = "Program log: Instruction: Deposit";
     let success_msg = &format!(
         "Program {} success",
@@ -230,8 +228,8 @@ fn process_transaction_logs(
     {
         if let Some(program_data) = msgs.iter().find(|s| s.starts_with(program_data_msg)) {
             let base64_data = program_data.trim_start_matches(program_data_msg);
-            let deposit: ReceivedSolEvent =
-                ReceivedSolEvent::from((signature.as_str(), solana_address.as_str(), base64_data));
+            let deposit: DepositEvent =
+                DepositEvent::from((signature.as_str(), solana_address.as_str(), base64_data));
 
             return Ok(deposit);
         } else {
@@ -304,7 +302,7 @@ pub async fn mint_cksol() {
 }
 
 /// Process events
-fn process_minted_event(event: &ReceivedSolEvent) {
+fn process_minted_event(event: &DepositEvent) {
     ic_canister_log::log!(
         DEBUG,
         "Signature: {} -> Minted {} to {} in block {}",
@@ -324,7 +322,7 @@ fn process_minted_event(event: &ReceivedSolEvent) {
     });
 }
 
-fn process_accepted_event(event: &ReceivedSolEvent, error_msg: Option<&str>) {
+fn process_accepted_event(event: &DepositEvent, error_msg: Option<&str>) {
     if let Some(error_msg) = error_msg {
         ic_canister_log::log!(DEBUG, "Signature: {} -> {}", event.sol_sig, error_msg);
     } else {

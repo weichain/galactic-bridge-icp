@@ -1,5 +1,4 @@
 use crate::{
-    events::WithdrawalEvent,
     lifecycle::SolanaNetwork,
     sol_rpc_client::providers::{RpcNodeProvider, MAINNET_PROVIDERS, TESTNET_PROVIDERS},
     sol_rpc_client::requests::{

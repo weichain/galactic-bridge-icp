@@ -1,5 +1,5 @@
 use crate::lifecycle::{InitArg, UpgradeArg};
-use crate::state::{ReceivedSolEvent, SolanaSignature, SolanaSignatureRange, WithdrawalEvent};
+use crate::state::{DepositEvent, SolanaSignature, SolanaSignatureRange, WithdrawalEvent};
 
 use minicbor::{Decode, Encode};
 
@@ -53,9 +53,9 @@ pub enum EventType {
     },
     #[n(8)]
     AcceptedEvent {
-        /// The accepted ReceivedSolEvent.
+        /// The accepted DepositEvent.
         #[n(0)]
-        event_source: ReceivedSolEvent,
+        event_source: DepositEvent,
         /// The reason for failure.
         #[n(1)]
         fail_reason: Option<String>,
@@ -64,7 +64,7 @@ pub enum EventType {
     MintedEvent {
         /// The minted ckSol event.
         #[n(0)]
-        event_source: ReceivedSolEvent,
+        event_source: DepositEvent,
     },
     #[n(10)]
     WithdrawalEvent {

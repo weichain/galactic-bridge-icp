@@ -8,7 +8,6 @@ use ic_cdk::api::{
         sign_with_ecdsa, EcdsaCurve, EcdsaKeyId, SignWithEcdsaArgument, SignWithEcdsaResponse,
     },
 };
-use ic_stable_structures::Storable;
 use minicbor::{Decode, Encode};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -93,7 +92,7 @@ impl Retriable for SolanaSignature {
 }
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Encode, Decode, Serialize)]
-pub struct ReceivedSolEvent {
+pub struct DepositEvent {
     #[n(0)]
     pub from_sol_address: String,
     #[cbor(n(1), with = "crate::cbor::principal")]
@@ -108,7 +107,7 @@ pub struct ReceivedSolEvent {
     retries: u8,
 }
 
-impl ReceivedSolEvent {
+impl DepositEvent {
     pub fn update_mint_block_index(&mut self, block_index: u64) {
         self.icp_mint_block_index = Some(block_index);
     }
@@ -118,7 +117,7 @@ impl ReceivedSolEvent {
     }
 }
 
-impl Retriable for ReceivedSolEvent {
+impl Retriable for DepositEvent {
     fn get_retries(&self) -> u8 {
         self.retries
     }
@@ -132,21 +131,12 @@ impl Retriable for ReceivedSolEvent {
     }
 }
 
-impl From<(&str, &str, &str)> for ReceivedSolEvent {
+impl From<(&str, &str, &str)> for DepositEvent {
     fn from(data: (&str, &str, &str)) -> Self {
         use base64::prelude::*;
         let (sol_sig, from_address, encode_data) = data;
 
         let bytes = BASE64_STANDARD.decode(encode_data).unwrap();
-
-        ic_canister_log::log!(
-            crate::logs::DEBUG,
-            "ReceivedSolEvent::from: bytes: {:?}, from_address: {}, sol_sig: {}",
-            bytes,
-            from_address,
-            sol_sig
-        );
-
         let amount_bytes = &bytes[bytes.len() - 8..];
         let mut value: u64 = 0;
         for i in 0..8 {
@@ -162,7 +152,7 @@ impl From<(&str, &str, &str)> for ReceivedSolEvent {
 
         let principal = Principal::from_text(address_hex).unwrap();
 
-        ReceivedSolEvent {
+        DepositEvent {
             from_sol_address: from_address.to_string(),
             to_icp_address: principal,
             amount: value,

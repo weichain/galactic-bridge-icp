@@ -1,6 +1,6 @@
 use crate::constants::DERIVATION_PATH;
 use crate::events::{
-    ReceivedSolEvent, Retriable, SolanaSignature, SolanaSignatureRange, WithdrawalEvent,
+    DepositEvent, Retriable, SolanaSignature, SolanaSignatureRange, WithdrawalEvent,
 };
 use crate::lifecycle::{SolanaNetwork, UpgradeArg};
 use crate::logs::DEBUG;
@@ -62,9 +62,9 @@ pub struct State {
     // invalid transactions - cannot be parsed, does not hold deposit event, blocked user, etc.
     pub invalid_events: HashMap<String, SolanaSignature>,
     // valid transaction events
-    pub accepted_events: HashMap<String, ReceivedSolEvent>,
+    pub accepted_events: HashMap<String, DepositEvent>,
     // minted events
-    pub minted_events: HashMap<String, ReceivedSolEvent>,
+    pub minted_events: HashMap<String, DepositEvent>,
     // withdrawal events
     pub withdrawal_events: HashMap<u64, WithdrawalEvent>,
 
@@ -239,7 +239,7 @@ impl State {
         self.invalid_events.insert(key.to_string(), sig);
     }
 
-    pub fn record_or_retry_accepted_event(&mut self, deposit: ReceivedSolEvent) {
+    pub fn record_or_retry_accepted_event(&mut self, deposit: DepositEvent) {
         let key = &deposit.sol_sig;
 
         match self.accepted_events.contains_key(key) {
@@ -266,7 +266,7 @@ impl State {
         };
     }
 
-    pub fn record_minted_event(&mut self, deposit: ReceivedSolEvent) {
+    pub fn record_minted_event(&mut self, deposit: DepositEvent) {
         let key = &deposit.sol_sig;
 
         _ = match self.accepted_events.remove(key) {
