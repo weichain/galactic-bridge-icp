@@ -52,8 +52,20 @@ pub fn apply_state_transition(state: &mut State, payload: &EventType) {
         EventType::MintedEvent { event_source } => {
             state.record_minted_event(event_source.clone());
         }
-        EventType::WithdrawalEvent { event_source } => {
-            state.record_withdrawal_event(event_source.clone());
+        EventType::WithdrawalRequestEvent {
+            event_source,
+            fail_reason: _,
+        } => {
+            state.record_or_retry_withdrawal_request_event(event_source.clone());
+        }
+        EventType::WithdrawalBurnedEvent {
+            event_source,
+            fail_reason: _,
+        } => {
+            state.record_or_retry_withdrawal_burned_event(event_source.clone());
+        }
+        EventType::WithdrawalRedeemedEvent { event_source } => {
+            state.record_withdrawal_redeemed_event(event_source.clone());
         }
     }
 }

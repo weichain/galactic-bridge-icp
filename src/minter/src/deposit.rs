@@ -287,8 +287,12 @@ fn process_transaction_logs(
     {
         if let Some(program_data) = msgs.iter().find(|s| s.starts_with(program_data_msg)) {
             let base64_data = program_data.trim_start_matches(program_data_msg);
-            let deposit: DepositEvent =
-                DepositEvent::from((signature.as_str(), solana_address.as_str(), base64_data));
+            let deposit: DepositEvent = DepositEvent::new(
+                mutate_state(State::next_mint_id),
+                signature.as_str(),
+                solana_address.as_str(),
+                base64_data,
+            );
 
             return Ok(deposit);
         } else {
@@ -336,8 +340,8 @@ pub async fn mint_cksol() {
                 amount: candid::Nat::from(event.amount),
                 fee: None,
                 created_at_time: Some(ic_cdk::api::time()),
-                // Memo is limited to 32 bytes in size, so cant fit much in there
-                memo: Some(LedgerMemo(mutate_state(State::next_mint_id)).into()),
+                // Memo is limited to 32 bytes in size, so can't fit much in there
+                memo: Some(LedgerMemo(event.id).into()),
             })
             .await
         {

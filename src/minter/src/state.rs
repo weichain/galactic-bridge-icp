@@ -61,8 +61,12 @@ pub struct State {
     pub accepted_events: HashMap<String, DepositEvent>,
     // minted events
     pub minted_events: HashMap<String, DepositEvent>,
-    // withdrawal events
-    pub withdrawal_events: HashMap<u64, WithdrawalEvent>,
+    // withdrawal request events
+    pub withdrawal_requested_events: HashMap<u64, WithdrawalEvent>,
+    // withdrawal with burned ckSol
+    pub withdrawal_burned_events: HashMap<u64, WithdrawalEvent>,
+    // withdrawal with generated coupon
+    pub withdrawal_redeemed_events: HashMap<u64, WithdrawalEvent>,
 
     // Withdrawal requests that are currently being processed
     pub withdrawing_principals: BTreeSet<Principal>,
@@ -116,7 +120,7 @@ impl State {
     pub fn compressed_public_key(&self) -> String {
         let public_key = match &self.ecdsa_public_key {
             Some(response) => &response.public_key,
-            None => ic_cdk::trap("BUG: public key is not initialized"),
+            None => ic_cdk::trap("Public key is not initialized"),
         };
 
         hex::encode(&public_key)
@@ -128,15 +132,13 @@ impl State {
 
         let public_key = match &self.ecdsa_public_key {
             Some(response) => &response.public_key,
-            None => ic_cdk::trap("BUG: public key is not initialized"),
+            None => ic_cdk::trap("Public key is not initialized"),
         };
 
-        let uncompressed_pubkey =
-            PublicKey::parse_slice(&public_key, Some(PublicKeyFormat::Compressed))
-                .expect("failed to deserialize sec1 encoding into public key")
-                .serialize();
-
-        hex::encode(uncompressed_pubkey)
+        match PublicKey::parse_slice(&public_key, Some(PublicKeyFormat::Compressed)) {
+            Ok(pk) => hex::encode(pk.serialize()),
+            Err(_) => ic_cdk::trap("Failed to deserialize sec1 encoding into public key"),
+        }
     }
 
     pub const fn solana_network(&self) -> SolanaNetwork {
@@ -281,14 +283,52 @@ impl State {
         _ = self.minted_events.insert(key.to_string(), deposit);
     }
 
-    pub fn record_withdrawal_event(&mut self, withdrawal: WithdrawalEvent) {
+    pub fn record_or_retry_withdrawal_request_event(&mut self, withdrawal: WithdrawalEvent) {
         let key = withdrawal.id;
-        assert!(
-            !self.withdrawal_events.contains_key(&key),
-            "Attempted to record existing withdrawal event: {key}."
-        );
 
-        _ = self.withdrawal_events.insert(key, withdrawal);
+        match self.withdrawal_requested_events.remove(&key) {
+            Some(mut withdrawal) => {
+                // in case withdrawal exists, increment the retries
+                withdrawal.retry.increment_retries();
+                self.withdrawal_requested_events.insert(key, withdrawal);
+            }
+            None => {
+                _ = self.withdrawal_requested_events.insert(key, withdrawal);
+            }
+        }
+    }
+
+    pub fn record_or_retry_withdrawal_burned_event(&mut self, withdrawal: WithdrawalEvent) {
+        let key = withdrawal.id;
+
+        match self.withdrawal_burned_events.contains_key(&key) {
+            // if it does not exist - add it
+            false => match self.withdrawal_requested_events.remove(&key) {
+                Some(_) => {
+                    self.withdrawal_burned_events.insert(key, withdrawal);
+                }
+                None => panic!("Attempted to remove NON existing withdrawal request event."),
+            },
+            // if it exists - increment the retries
+            true => {
+                let mut event: WithdrawalEvent =
+                    self.withdrawal_burned_events.remove(&key).unwrap();
+
+                event.retry.increment_retries();
+                self.withdrawal_burned_events.insert(key, event);
+            }
+        }
+    }
+
+    pub fn record_withdrawal_redeemed_event(&mut self, withdrawal: WithdrawalEvent) {
+        let key = withdrawal.id;
+
+        match self.withdrawal_burned_events.remove(&key) {
+            Some(_) => {
+                self.withdrawal_redeemed_events.insert(key, withdrawal);
+            }
+            None => panic!("Attempted to remove NON existing withdrawal burned event."),
+        }
     }
 
     pub fn next_request_id(&mut self) -> u64 {

@@ -120,10 +120,7 @@ pub async fn get_address() -> (String, String) {
 ///
 /// dfx canister call minter withdraw "(\"HS6NTv6GBVSLct8dsimRWRvjczJTAgfgDJt8VpR8wtGm\", 100_000)" --identity $USER_PRINCIPAL_NAME
 #[update]
-async fn withdraw(
-    solana_address: String,
-    withdraw_amount: candid::Nat,
-) -> Result<Coupon, WithdrawError> {
+async fn withdraw(solana_address: String, withdraw_amount: candid::Nat) -> Coupon {
     let caller = validate_caller_not_anonymous();
 
     withdraw_cksol(
