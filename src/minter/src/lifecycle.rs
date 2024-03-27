@@ -52,12 +52,11 @@ impl TryFrom<InitArg> for State {
             invalid_events: Default::default(),
             accepted_events: Default::default(),
             minted_events: Default::default(),
-            withdrawal_requested_events: Default::default(),
             withdrawal_burned_events: Default::default(),
             withdrawal_redeemed_events: Default::default(),
             withdrawing_principals: Default::default(),
             burn_id_counter: 0,
-            mint_id_counter: 0,
+            deposit_id_counter: 0,
             http_request_counter: 0,
             active_tasks: Default::default(),
         };

@@ -154,7 +154,7 @@ async fn get_ledger_id() -> String {
 }
 
 #[query]
-async fn verify(coupon: Coupon) -> bool {
+async fn verify(coupon: Coupon) -> Result<bool, WithdrawError> {
     coupon.verify()
 }
 

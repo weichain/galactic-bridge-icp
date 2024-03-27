@@ -67,14 +67,6 @@ pub enum EventType {
         event_source: DepositEvent,
     },
     #[n(10)]
-    WithdrawalRequestEvent {
-        /// The withdrawal request event.
-        #[n(0)]
-        event_source: WithdrawalEvent,
-        #[n(1)]
-        fail_reason: Option<String>,
-    },
-    #[n(11)]
     WithdrawalBurnedEvent {
         /// The withdrawal ckSOL burned event.
         #[n(0)]
@@ -82,7 +74,7 @@ pub enum EventType {
         #[n(1)]
         fail_reason: Option<String>,
     },
-    #[n(12)]
+    #[n(11)]
     WithdrawalRedeemedEvent {
         /// The withdrawal ckSol event.
         #[n(0)]

@@ -28,6 +28,10 @@ pub enum WithdrawError {
     BurningCkSolFailed(TransferFromError),
     SendingMessageToLedgerFailed { id: String, code: i32, msg: String },
     SigningWithEcdsaFailed { code: RejectionCode, msg: String },
+    HexDecodingError,
+    DeserializationError,
+    RecoveryError,
+    ParityRecoveryFailed { signature: String, pubkey: String },
 }
 
 impl std::fmt::Display for WithdrawError {
@@ -45,6 +49,18 @@ impl std::fmt::Display for WithdrawError {
             WithdrawError::SigningWithEcdsaFailed { code, msg } => {
                 write!(f, "Failed to sign with ECDSA: {code:?}: {msg}",)
             }
+            WithdrawError::HexDecodingError => {
+                write!(f, "Failed to hex-decode")
+            }
+            WithdrawError::DeserializationError => {
+                write!(f, "Failed to deserialize")
+            }
+            WithdrawError::RecoveryError => {
+                write!(f, "Failed to recover key")
+            }
+            WithdrawError::ParityRecoveryFailed { signature, pubkey } => {
+                write!(f, "Failed to recover the parity bit from a signature: {signature}, pubkey: {pubkey}")
+            }
         }
     }
 }
@@ -57,26 +73,27 @@ pub async fn withdraw_cksol(from: Principal, to: String, amount: u64) -> Coupon 
         ))
     });
 
-    let mut event = create_withdrawal_request_event(&from, &to, amount);
-    event = burn_cksol(&mut event).await;
+    let mut event = burn_cksol(&from, &to, amount)
+        .await
+        .unwrap_or_else(|err| ic_cdk::trap(&err.to_string()));
 
-    generate_cupon(&mut event).await
+    generate_cupon(&mut event)
+        .await
+        .unwrap_or_else(|err| ic_cdk::trap(&err.to_string()))
 }
 
-fn create_withdrawal_request_event(from: &Principal, to: &String, amount: u64) -> WithdrawalEvent {
-    let withdraw_event = WithdrawalEvent::new(
+async fn burn_cksol(
+    from: &Principal,
+    to: &String,
+    amount: u64,
+) -> Result<WithdrawalEvent, WithdrawError> {
+    let mut event = WithdrawalEvent::new(
         mutate_state(State::next_burn_id),
         from.clone(),
         to.clone(),
         amount,
     );
 
-    process_withdrawal_request_event(&withdraw_event, None);
-
-    withdraw_event
-}
-
-async fn burn_cksol(event: &mut WithdrawalEvent) -> WithdrawalEvent {
     let ledger_canister_id = read_state(|s| s.ledger_id);
     let client = ICRC1Client {
         runtime: CdkRuntime,
@@ -103,60 +120,34 @@ async fn burn_cksol(event: &mut WithdrawalEvent) -> WithdrawalEvent {
             // update event with the burn block index
             event.update_after_burn(ic_cdk::api::time(), burn_block_index);
 
-            process_withdrawal_burn_event(event, None);
+            process_withdrawal_burn_event(&event, None);
 
-            event.clone()
+            Ok(event.clone())
         }
-        Ok(Err(err)) => {
-            let err = WithdrawError::BurningCkSolFailed(err);
-            process_withdrawal_request_event(event, Some(err.clone()));
-            ic_cdk::trap(&err.to_string());
-        }
-        Err(err) => {
-            let err = WithdrawError::SendingMessageToLedgerFailed {
-                id: ledger_canister_id.to_string(),
-                code: err.0,
-                msg: err.1,
-            };
-            process_withdrawal_request_event(event, Some(err.clone()));
-
-            ic_cdk::trap(&err.to_string());
-        }
+        Ok(Err(err)) => Err(WithdrawError::BurningCkSolFailed(err)),
+        Err(err) => Err(WithdrawError::SendingMessageToLedgerFailed {
+            id: ledger_canister_id.to_string(),
+            code: err.0,
+            msg: err.1,
+        }),
     }
 }
 
-async fn generate_cupon(event: &mut WithdrawalEvent) -> Coupon {
+async fn generate_cupon(event: &mut WithdrawalEvent) -> Result<Coupon, WithdrawError> {
     match event.to_coupon().await {
         Ok(coupon) => {
             event.update_after_redeem(coupon.clone());
             process_withdrawal_redeem_event(event);
-            coupon
+            Ok(coupon)
         }
         Err(err) => {
             process_withdrawal_burn_event(event, Some(err.clone()));
-
-            ic_cdk::trap(&err.to_string());
+            Err(err)
         }
     }
 }
 
 /// Process events
-fn process_withdrawal_request_event(withdraw_event: &WithdrawalEvent, err: Option<WithdrawError>) {
-    if let Some(err) = err.clone() {
-        ic_canister_log::log!(DEBUG, "{err}");
-    }
-
-    mutate_state(|s| {
-        process_event(
-            s,
-            EventType::WithdrawalRequestEvent {
-                event_source: withdraw_event.clone(),
-                fail_reason: err.map(|e| e.to_string()),
-            },
-        )
-    });
-}
-
 fn process_withdrawal_burn_event(withdraw_event: &WithdrawalEvent, err: Option<WithdrawError>) {
     if let Some(err) = err.clone() {
         ic_canister_log::log!(DEBUG, "{err}");
@@ -218,50 +209,49 @@ impl Coupon {
         }
     }
 
-    pub fn y_parity(&mut self) {
+    pub fn y_parity(&mut self) -> Result<u8, WithdrawError> {
         let signature_bytes =
-            hex::decode(&self.signature_hex).expect("failed to hex-decode signature");
+            hex::decode(&self.signature_hex).map_err(|_| WithdrawError::HexDecodingError)?;
         let signature = Signature::try_from(signature_bytes.as_slice())
-            .expect("failed to deserialize signature");
-
+            .map_err(|_| WithdrawError::DeserializationError)?;
         let pubkey_bytes =
-            hex::decode(&self.icp_public_key_hex).expect("failed to hex-decode public key");
-        let orig_key =
-            VerifyingKey::from_sec1_bytes(&pubkey_bytes).expect("failed to parse the pubkey");
+            hex::decode(&self.icp_public_key_hex).map_err(|_| WithdrawError::HexDecodingError)?;
+        let orig_key = VerifyingKey::from_sec1_bytes(&pubkey_bytes)
+            .map_err(|_| WithdrawError::DeserializationError)?;
 
         let message_bytes = self.message.as_bytes();
 
         for parity in [0u8, 1] {
-            let recid = RecoveryId::try_from(parity).unwrap();
-            let recovered_key = VerifyingKey::recover_from_msg(&message_bytes, &signature, recid)
-                .expect("failed to recover key");
+            let rec_id = RecoveryId::try_from(parity).unwrap();
+            let recovered_key = VerifyingKey::recover_from_msg(&message_bytes, &signature, rec_id)
+                .map_err(|_| WithdrawError::RecoveryError)?;
 
             if recovered_key.eq(&orig_key) {
                 self.recovery_id = Some(parity);
-                return;
+                return Ok(parity);
             }
         }
 
-        ic_cdk::trap(&format!(
-            "failed to recover the parity bit from a signature: sig: {}, pubkey: {}",
-            self.signature_hex, self.icp_public_key_hex,
-        ))
+        Err(WithdrawError::ParityRecoveryFailed {
+            signature: self.signature_hex.to_string(),
+            pubkey: self.icp_public_key_hex.to_string(),
+        })
     }
 
-    pub fn verify(&self) -> bool {
+    pub fn verify(&self) -> Result<bool, WithdrawError> {
         let signature_bytes =
-            hex::decode(&self.signature_hex).expect("failed to hex-decode signature");
+            hex::decode(&self.signature_hex).map_err(|_| WithdrawError::HexDecodingError)?;
         let pubkey_bytes =
-            hex::decode(&self.icp_public_key_hex).expect("failed to hex-decode public key");
+            hex::decode(&self.icp_public_key_hex).map_err(|_| WithdrawError::HexDecodingError)?;
         let message_bytes = self.message.as_bytes();
 
         let signature = Signature::try_from(signature_bytes.as_slice())
-            .expect("failed to deserialize signature");
+            .map_err(|_| WithdrawError::DeserializationError)?;
 
-        VerifyingKey::from_sec1_bytes(&pubkey_bytes)
-            .expect("failed to deserialize sec1 encoding into public key")
+        Ok(VerifyingKey::from_sec1_bytes(&pubkey_bytes)
+            .map_err(|_| WithdrawError::DeserializationError)?
             .verify(message_bytes, &signature)
-            .is_ok()
+            .is_ok())
     }
 }
 
@@ -277,9 +267,11 @@ impl WithdrawalEvent {
                     signature_hex,
                     icp_public_key_hex,
                 );
-                response.y_parity();
 
-                Ok(response)
+                match response.y_parity() {
+                    Ok(_) => Ok(response),
+                    Err(err) => return Err(err),
+                }
             }
             Err((code, msg)) => Err(WithdrawError::SigningWithEcdsaFailed { code, msg }),
         }

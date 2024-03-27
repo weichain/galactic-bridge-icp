@@ -61,8 +61,7 @@ pub struct State {
     pub accepted_events: HashMap<String, DepositEvent>,
     // minted events
     pub minted_events: HashMap<String, DepositEvent>,
-    // withdrawal request events
-    pub withdrawal_requested_events: HashMap<u64, WithdrawalEvent>,
+
     // withdrawal with burned ckSol
     pub withdrawal_burned_events: HashMap<u64, WithdrawalEvent>,
     // withdrawal with generated coupon
@@ -71,10 +70,11 @@ pub struct State {
     // Withdrawal requests that are currently being processed
     pub withdrawing_principals: BTreeSet<Principal>,
 
-    // Unique identifier for each mint call to ledger
-    pub mint_id_counter: u64,
+    // Unique identifier for each deposit -> used during mint process for unique memo
+    pub deposit_id_counter: u64,
 
     // Unique identifier for each burn call to ledger
+    // Burn execution is accepted as a start of the withdraw process.
     pub burn_id_counter: u64,
 
     /// Number of HTTP outcalls since the last upgrade.
@@ -283,32 +283,14 @@ impl State {
         _ = self.minted_events.insert(key.to_string(), deposit);
     }
 
-    pub fn record_or_retry_withdrawal_request_event(&mut self, withdrawal: WithdrawalEvent) {
-        let key = withdrawal.id;
-
-        match self.withdrawal_requested_events.remove(&key) {
-            Some(mut withdrawal) => {
-                // in case withdrawal exists, increment the retries
-                withdrawal.retry.increment_retries();
-                self.withdrawal_requested_events.insert(key, withdrawal);
-            }
-            None => {
-                _ = self.withdrawal_requested_events.insert(key, withdrawal);
-            }
-        }
-    }
-
     pub fn record_or_retry_withdrawal_burned_event(&mut self, withdrawal: WithdrawalEvent) {
         let key = withdrawal.id;
 
         match self.withdrawal_burned_events.contains_key(&key) {
             // if it does not exist - add it
-            false => match self.withdrawal_requested_events.remove(&key) {
-                Some(_) => {
-                    self.withdrawal_burned_events.insert(key, withdrawal);
-                }
-                None => panic!("Attempted to remove NON existing withdrawal request event."),
-            },
+            false => {
+                self.withdrawal_burned_events.insert(key, withdrawal);
+            }
             // if it exists - increment the retries
             true => {
                 let mut event: WithdrawalEvent =
@@ -320,11 +302,12 @@ impl State {
         }
     }
 
-    pub fn record_withdrawal_redeemed_event(&mut self, withdrawal: WithdrawalEvent) {
+    pub fn record_withdrawal_redeemed_event(&mut self, mut withdrawal: WithdrawalEvent) {
         let key = withdrawal.id;
 
         match self.withdrawal_burned_events.remove(&key) {
             Some(_) => {
+                withdrawal.retry.reset_retries();
                 self.withdrawal_redeemed_events.insert(key, withdrawal);
             }
             None => panic!("Attempted to remove NON existing withdrawal burned event."),
@@ -339,10 +322,10 @@ impl State {
         current_request_id
     }
 
-    pub fn next_mint_id(&mut self) -> u64 {
-        let current_mint_id = self.mint_id_counter;
-        self.mint_id_counter = self.mint_id_counter.wrapping_add(1);
-        current_mint_id
+    pub fn next_deposit_id(&mut self) -> u64 {
+        let current_deposit_id = self.deposit_id_counter;
+        self.deposit_id_counter = self.deposit_id_counter.wrapping_add(1);
+        current_deposit_id
     }
 
     pub fn next_burn_id(&mut self) -> u64 {
