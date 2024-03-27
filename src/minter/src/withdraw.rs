@@ -40,6 +40,8 @@ pub enum WithdrawError {
         burn_id: u64,
         err: CouponError,
     },
+    UnknownBurnId(u64),
+    RedeemedEventError(u64),
 }
 
 impl std::fmt::Display for WithdrawError {
@@ -65,6 +67,12 @@ impl std::fmt::Display for WithdrawError {
                     f,
                     "Failed to generate a coupon for burn_id {burn_id} error: {err}"
                 )
+            }
+            WithdrawError::UnknownBurnId(burn_id) => {
+                write!(f, "Unknown burn_id {burn_id}")
+            }
+            WithdrawError::RedeemedEventError(burn_id) => {
+                write!(f, "Redeemed event does NOT hold coupon: {burn_id}")
             }
         }
     }
@@ -110,9 +118,38 @@ pub async fn withdraw_cksol(
     });
 
     let mut event = burn_cksol(&from, &to, amount).await.map_err(|err| err)?;
-    let coupon = generate_cupon(&mut event).await.map_err(|err| err)?;
+    let coupon = generate_coupon(&mut event).await.map_err(|err| err)?;
 
     Ok(coupon)
+}
+
+pub async fn get_coupon(from: Principal, burn_id: u64) -> Result<Coupon, WithdrawError> {
+    let _guard = retrieve_eth_guard(from).unwrap_or_else(|e| {
+        ic_cdk::trap(&format!(
+            "Failed retrieving guard for principal {}: {:?}",
+            from, e
+        ))
+    });
+
+    let events = read_state(|s| s.withdrawal_redeemed_events.clone());
+
+    match events.get(&burn_id) {
+        Some(redeemed_event) => match redeemed_event.get_coupon() {
+            Some(coupon) => Ok(coupon.clone()),
+            None => Err(WithdrawError::RedeemedEventError(burn_id)),
+        },
+        None => {
+            let burned_events = read_state(|s| s.withdrawal_burned_events.clone());
+            match burned_events.get(&burn_id) {
+                Some(burned_event) => {
+                    let mut event = burned_event.clone();
+                    let coupon = generate_coupon(&mut event).await.map_err(|err| err)?;
+                    Ok(coupon)
+                }
+                None => return Err(WithdrawError::UnknownBurnId(burn_id)),
+            }
+        }
+    }
 }
 
 async fn burn_cksol(
@@ -166,7 +203,7 @@ async fn burn_cksol(
     }
 }
 
-async fn generate_cupon(event: &mut WithdrawalEvent) -> Result<Coupon, WithdrawError> {
+async fn generate_coupon(event: &mut WithdrawalEvent) -> Result<Coupon, WithdrawError> {
     match event.to_coupon().await {
         Ok(coupon) => {
             event.update_after_redeem(coupon.clone());

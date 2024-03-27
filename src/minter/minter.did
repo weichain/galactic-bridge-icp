@@ -5,6 +5,12 @@ type Coupon = record {
   signature_hex : text;
   message_hash : text;
 };
+type CouponError = variant {
+  RecoveryError;
+  DeserializationError;
+  HexDecodingError;
+  ParityRecoveryFailed : record { signature : text; pubkey : text };
+};
 type InitArg = record {
   ecdsa_key_name : text;
   solana_initial_signature : text;
@@ -14,16 +20,50 @@ type InitArg = record {
   minimum_withdrawal_amount : nat;
 };
 type MinterArg = variant { Upgrade : UpgradeArg; Init : InitArg };
+type RejectionCode = variant {
+  NoError;
+  CanisterError;
+  SysTransient;
+  DestinationInvalid;
+  Unknown;
+  SysFatal;
+  CanisterReject;
+};
+type Result = variant { Ok : bool; Err : CouponError };
+type Result_1 = variant { Ok : Coupon; Err : WithdrawError };
 type SolanaNetwork = variant { Mainnet; Testnet };
+type TransferFromError = variant {
+  GenericError : record { message : text; error_code : nat };
+  TemporarilyUnavailable;
+  InsufficientAllowance : record { allowance : nat };
+  BadBurn : record { min_burn_amount : nat };
+  Duplicate : record { duplicate_of : nat };
+  BadFee : record { expected_fee : nat };
+  CreatedInFuture : record { ledger_time : nat64 };
+  TooOld;
+  InsufficientFunds : record { balance : nat };
+};
 type UpgradeArg = record {
   solana_contract_address : opt text;
   minimum_withdrawal_amount : opt nat;
+};
+type WithdrawError = variant {
+  BurningCkSolFailed : TransferFromError;
+  CouponError : record { err : CouponError; burn_id : nat64 };
+  SigningWithEcdsaFailed : record {
+    msg : text;
+    code : RejectionCode;
+    burn_id : nat64;
+  };
+  RedeemedEventError : nat64;
+  SendingMessageToLedgerFailed : record { id : text; msg : text; code : int32 };
+  UnknownBurnId : nat64;
 };
 service : (MinterArg) -> {
   get_active_tasks : () -> () query;
   get_address : () -> (text, text);
   get_ledger_id : () -> (text) query;
   get_state : () -> () query;
-  verify : (Coupon) -> (bool) query;
-  withdraw : (text, nat) -> (Coupon);
+  verify : (Coupon) -> (Result) query;
+  withdraw : (text, nat) -> (Result_1);
 }
