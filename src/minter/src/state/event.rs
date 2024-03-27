@@ -16,12 +16,16 @@ pub enum EventType {
     /// Last known signature by the minter.
     #[n(2)]
     LastKnownSolanaSignature(#[n(0)] String),
-    /// New signature range in solana.
     #[n(3)]
-    NewSolanaSignatureRange(#[n(0)] SolanaSignatureRange),
+    LastDepositIdCounter(#[n(0)] u64),
     #[n(4)]
-    RemoveSolanaSignatureRange(#[n(0)] SolanaSignatureRange),
+    LastBurnIdCounter(#[n(0)] u64),
+    /// New signature range in solana.
     #[n(5)]
+    NewSolanaSignatureRange(#[n(0)] SolanaSignatureRange),
+    #[n(6)]
+    RemoveSolanaSignatureRange(#[n(0)] SolanaSignatureRange),
+    #[n(7)]
     RetrySolanaSignatureRange {
         /// The previously failed range.
         #[n(0)]
@@ -33,7 +37,7 @@ pub enum EventType {
         #[n(2)]
         fail_reason: String,
     },
-    #[n(6)]
+    #[n(8)]
     SolanaSignature {
         /// The skipped transaction.
         #[n(0)]
@@ -42,7 +46,7 @@ pub enum EventType {
         #[n(1)]
         fail_reason: Option<String>,
     },
-    #[n(7)]
+    #[n(9)]
     InvalidEvent {
         /// The invalid transaction.
         #[n(0)]
@@ -51,7 +55,7 @@ pub enum EventType {
         #[n(1)]
         fail_reason: String,
     },
-    #[n(8)]
+    #[n(10)]
     AcceptedEvent {
         /// The accepted DepositEvent.
         #[n(0)]
@@ -60,13 +64,13 @@ pub enum EventType {
         #[n(1)]
         fail_reason: Option<String>,
     },
-    #[n(9)]
+    #[n(11)]
     MintedEvent {
         /// The minted ckSol event.
         #[n(0)]
         event_source: DepositEvent,
     },
-    #[n(10)]
+    #[n(12)]
     WithdrawalBurnedEvent {
         /// The withdrawal ckSOL burned event.
         #[n(0)]
@@ -74,7 +78,7 @@ pub enum EventType {
         #[n(1)]
         fail_reason: Option<String>,
     },
-    #[n(11)]
+    #[n(13)]
     WithdrawalRedeemedEvent {
         /// The withdrawal ckSol event.
         #[n(0)]

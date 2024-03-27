@@ -44,6 +44,8 @@ type TransferFromError = variant {
   InsufficientFunds : record { balance : nat };
 };
 type UpgradeArg = record {
+  ecdsa_key_name : opt text;
+  solana_initial_signature : opt text;
   solana_contract_address : opt text;
   minimum_withdrawal_amount : opt nat;
 };

@@ -5,6 +5,7 @@ use crate::lifecycle::{SolanaNetwork, UpgradeArg};
 use candid::Principal;
 use ic_cdk::api::management_canister::ecdsa::EcdsaPublicKeyResponse;
 use num_bigint::BigUint;
+use num_bigint::ToBigUint;
 use std::{
     cell::RefCell,
     collections::{BTreeSet, HashMap, HashSet},
@@ -114,7 +115,34 @@ impl State {
         Ok(())
     }
 
-    fn upgrade(&mut self, upgrade_args: UpgradeArg) -> () {}
+    fn upgrade(&mut self, upgrade_args: UpgradeArg) -> Result<(), InvalidStateError> {
+        let UpgradeArg {
+            solana_contract_address,
+            solana_initial_signature,
+            ecdsa_key_name,
+            minimum_withdrawal_amount,
+        } = upgrade_args;
+        if let Some(address) = solana_contract_address {
+            self.solana_contract_address = address;
+        }
+        if let Some(signature) = solana_initial_signature {
+            self.solana_initial_signature = signature;
+        }
+        if let Some(ecdsa_key_name) = ecdsa_key_name {
+            self.ecdsa_key_name = ecdsa_key_name;
+        }
+        if let Some(amount) = minimum_withdrawal_amount {
+            let amount =
+                amount
+                    .0
+                    .to_biguint()
+                    .ok_or(InvalidStateError::InvalidMinimumWithdrawalAmount(
+                        "ERROR: minimum_withdrawal_amount is not a valid u256".to_string(),
+                    ))?;
+            self.minimum_withdrawal_amount = amount;
+        }
+        self.validate_config()
+    }
 
     // compressed public key in hex format - 33 bytes
     pub fn compressed_public_key(&self) -> String {
@@ -332,6 +360,16 @@ impl State {
         let current_withdrawal_id = self.burn_id_counter;
         self.burn_id_counter = self.burn_id_counter.wrapping_add(1);
         current_withdrawal_id
+    }
+
+    // use only during upgrade
+    pub fn set_deposit_id_counter(&mut self, id: &u64) {
+        self.deposit_id_counter = *id;
+    }
+
+    // use only during upgrade
+    pub fn set_burn_id_counter(&mut self, id: &u64) {
+        self.burn_id_counter = *id;
     }
 }
 

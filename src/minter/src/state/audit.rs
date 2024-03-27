@@ -11,15 +11,21 @@ pub fn apply_state_transition(state: &mut State, payload: &EventType) {
             panic!("state re-initialization is not allowed: {init_arg:?}");
         }
         EventType::Upgrade(upgrade_arg) => {
-            // TODO: upgrade
-            state.upgrade(upgrade_arg.clone())
-            // .expect("applying upgrade event should succeed");
+            state
+                .upgrade(upgrade_arg.clone())
+                .expect("applying upgrade event should succeed");
         }
         EventType::LastKnownSolanaSignature(signature) => {
             state.record_solana_last_known_signature(signature);
         }
         EventType::NewSolanaSignatureRange(range) => {
             state.record_solana_signature_range(range.clone());
+        }
+        EventType::LastDepositIdCounter(id) => {
+            state.set_deposit_id_counter(id);
+        }
+        EventType::LastBurnIdCounter(id) => {
+            state.set_burn_id_counter(id);
         }
         EventType::RemoveSolanaSignatureRange(range) => {
             state.remove_solana_signature_range(range);

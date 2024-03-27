@@ -1,4 +1,10 @@
-use crate::state::{InvalidStateError, State};
+use crate::logs::INFO;
+use crate::state::{
+    audit::{process_event, replay_events, EventType},
+    mutate_state, InvalidStateError, State, STATE,
+};
+use crate::storage::total_event_count;
+
 use candid::{CandidType, Deserialize, Nat, Principal};
 use minicbor::{Decode, Encode};
 use num_bigint::ToBigUint;
@@ -70,12 +76,35 @@ impl TryFrom<InitArg> for State {
 pub struct UpgradeArg {
     #[n(0)]
     pub solana_contract_address: Option<String>,
-    #[cbor(n(1), with = "crate::cbor::nat::option")]
+    #[n(1)]
+    pub solana_initial_signature: Option<String>,
+    #[n(2)]
+    pub ecdsa_key_name: Option<String>,
+    #[cbor(n(3), with = "crate::cbor::nat::option")]
     pub minimum_withdrawal_amount: Option<Nat>,
 }
 
-// TODO: upgrade
-pub fn post_upgrade(upgrade_args: Option<UpgradeArg>) {}
+pub fn post_upgrade(upgrade_args: Option<UpgradeArg>) {
+    let start = ic_cdk::api::instruction_counter();
+
+    STATE.with(|cell| {
+        *cell.borrow_mut() = Some(replay_events());
+    });
+    if let Some(args) = upgrade_args {
+        mutate_state(|s| process_event(s, EventType::Upgrade(args)))
+    }
+
+    let end = ic_cdk::api::instruction_counter();
+
+    let event_count = total_event_count();
+    let instructions_consumed = end - start;
+
+    ic_canister_log::log!(
+        INFO,
+        "[upgrade]: replaying {event_count} events consumed {instructions_consumed} instructions ({} instructions per event on average)",
+        instructions_consumed / event_count
+    );
+}
 
 #[derive(CandidType, Deserialize, Clone, Debug)]
 pub enum MinterArg {

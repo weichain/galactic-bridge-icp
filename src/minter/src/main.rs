@@ -84,6 +84,8 @@ fn pre_upgrade() {
         storage::record_event(EventType::LastKnownSolanaSignature(
             s.get_solana_last_known_signature(),
         ));
+        storage::record_event(EventType::LastDepositIdCounter(s.deposit_id_counter));
+        storage::record_event(EventType::LastBurnIdCounter(s.burn_id_counter));
     });
 }
 
