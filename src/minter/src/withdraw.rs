@@ -26,12 +26,20 @@ use sha2::{Digest, Sha256};
 #[derive(CandidType, Debug, Clone, PartialEq, Eq)]
 pub enum WithdrawError {
     BurningCkSolFailed(TransferFromError),
-    SendingMessageToLedgerFailed { id: String, code: i32, msg: String },
-    SigningWithEcdsaFailed { code: RejectionCode, msg: String },
-    HexDecodingError,
-    DeserializationError,
-    RecoveryError,
-    ParityRecoveryFailed { signature: String, pubkey: String },
+    SendingMessageToLedgerFailed {
+        id: String,
+        code: i32,
+        msg: String,
+    },
+    SigningWithEcdsaFailed {
+        burn_id: u64,
+        code: RejectionCode,
+        msg: String,
+    },
+    CouponError {
+        burn_id: u64,
+        err: CouponError,
+    },
 }
 
 impl std::fmt::Display for WithdrawError {
@@ -46,26 +54,54 @@ impl std::fmt::Display for WithdrawError {
                     "Failed to send a message to the ledger {id}: {code:?}: {msg}",
                 )
             }
-            WithdrawError::SigningWithEcdsaFailed { code, msg } => {
-                write!(f, "Failed to sign with ECDSA: {code:?}: {msg}",)
+            WithdrawError::SigningWithEcdsaFailed { burn_id, code, msg } => {
+                write!(
+                    f,
+                    "Failed to sign with ECDSA for burn_id: {burn_id} error: {code:?}: {msg}",
+                )
             }
-            WithdrawError::HexDecodingError => {
+            WithdrawError::CouponError { burn_id, err } => {
+                write!(
+                    f,
+                    "Failed to generate a coupon for burn_id {burn_id} error: {err}"
+                )
+            }
+        }
+    }
+}
+
+#[derive(CandidType, Debug, Clone, PartialEq, Eq)]
+pub enum CouponError {
+    HexDecodingError,
+    DeserializationError,
+    RecoveryError,
+    ParityRecoveryFailed { signature: String, pubkey: String },
+}
+
+impl std::fmt::Display for CouponError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CouponError::HexDecodingError => {
                 write!(f, "Failed to hex-decode")
             }
-            WithdrawError::DeserializationError => {
+            CouponError::DeserializationError => {
                 write!(f, "Failed to deserialize")
             }
-            WithdrawError::RecoveryError => {
+            CouponError::RecoveryError => {
                 write!(f, "Failed to recover key")
             }
-            WithdrawError::ParityRecoveryFailed { signature, pubkey } => {
+            CouponError::ParityRecoveryFailed { signature, pubkey } => {
                 write!(f, "Failed to recover the parity bit from a signature: {signature}, pubkey: {pubkey}")
             }
         }
     }
 }
 
-pub async fn withdraw_cksol(from: Principal, to: String, amount: u64) -> Coupon {
+pub async fn withdraw_cksol(
+    from: Principal,
+    to: String,
+    amount: u64,
+) -> Result<Coupon, WithdrawError> {
     let _guard = retrieve_eth_guard(from).unwrap_or_else(|e| {
         ic_cdk::trap(&format!(
             "Failed retrieving guard for principal {}: {:?}",
@@ -73,13 +109,10 @@ pub async fn withdraw_cksol(from: Principal, to: String, amount: u64) -> Coupon 
         ))
     });
 
-    let mut event = burn_cksol(&from, &to, amount)
-        .await
-        .unwrap_or_else(|err| ic_cdk::trap(&err.to_string()));
+    let mut event = burn_cksol(&from, &to, amount).await.map_err(|err| err)?;
+    let coupon = generate_cupon(&mut event).await.map_err(|err| err)?;
 
-    generate_cupon(&mut event)
-        .await
-        .unwrap_or_else(|err| ic_cdk::trap(&err.to_string()))
+    Ok(coupon)
 }
 
 async fn burn_cksol(
@@ -107,7 +140,7 @@ async fn burn_cksol(
         amount: candid::Nat::from(event.amount),
         fee: None,
         created_at_time: Some(ic_cdk::api::time()),
-        memo: Some(LedgerMemo(event.id).into()),
+        memo: Some(LedgerMemo(event.get_burn_id()).into()),
     };
 
     match client.transfer_from(args).await {
@@ -209,22 +242,22 @@ impl Coupon {
         }
     }
 
-    pub fn y_parity(&mut self) -> Result<u8, WithdrawError> {
+    pub fn y_parity(&mut self) -> Result<u8, CouponError> {
         let signature_bytes =
-            hex::decode(&self.signature_hex).map_err(|_| WithdrawError::HexDecodingError)?;
+            hex::decode(&self.signature_hex).map_err(|_| CouponError::HexDecodingError)?;
         let signature = Signature::try_from(signature_bytes.as_slice())
-            .map_err(|_| WithdrawError::DeserializationError)?;
+            .map_err(|_| CouponError::DeserializationError)?;
         let pubkey_bytes =
-            hex::decode(&self.icp_public_key_hex).map_err(|_| WithdrawError::HexDecodingError)?;
+            hex::decode(&self.icp_public_key_hex).map_err(|_| CouponError::HexDecodingError)?;
         let orig_key = VerifyingKey::from_sec1_bytes(&pubkey_bytes)
-            .map_err(|_| WithdrawError::DeserializationError)?;
+            .map_err(|_| CouponError::DeserializationError)?;
 
         let message_bytes = self.message.as_bytes();
 
         for parity in [0u8, 1] {
             let rec_id = RecoveryId::try_from(parity).unwrap();
             let recovered_key = VerifyingKey::recover_from_msg(&message_bytes, &signature, rec_id)
-                .map_err(|_| WithdrawError::RecoveryError)?;
+                .map_err(|_| CouponError::RecoveryError)?;
 
             if recovered_key.eq(&orig_key) {
                 self.recovery_id = Some(parity);
@@ -232,24 +265,24 @@ impl Coupon {
             }
         }
 
-        Err(WithdrawError::ParityRecoveryFailed {
+        Err(CouponError::ParityRecoveryFailed {
             signature: self.signature_hex.to_string(),
             pubkey: self.icp_public_key_hex.to_string(),
         })
     }
 
-    pub fn verify(&self) -> Result<bool, WithdrawError> {
+    pub fn verify(&self) -> Result<bool, CouponError> {
         let signature_bytes =
-            hex::decode(&self.signature_hex).map_err(|_| WithdrawError::HexDecodingError)?;
+            hex::decode(&self.signature_hex).map_err(|_| CouponError::HexDecodingError)?;
         let pubkey_bytes =
-            hex::decode(&self.icp_public_key_hex).map_err(|_| WithdrawError::HexDecodingError)?;
+            hex::decode(&self.icp_public_key_hex).map_err(|_| CouponError::HexDecodingError)?;
         let message_bytes = self.message.as_bytes();
 
         let signature = Signature::try_from(signature_bytes.as_slice())
-            .map_err(|_| WithdrawError::DeserializationError)?;
+            .map_err(|_| CouponError::DeserializationError)?;
 
         Ok(VerifyingKey::from_sec1_bytes(&pubkey_bytes)
-            .map_err(|_| WithdrawError::DeserializationError)?
+            .map_err(|_| CouponError::DeserializationError)?
             .verify(message_bytes, &signature)
             .is_ok())
     }
@@ -270,10 +303,19 @@ impl WithdrawalEvent {
 
                 match response.y_parity() {
                     Ok(_) => Ok(response),
-                    Err(err) => return Err(err),
+                    Err(err) => {
+                        return Err(WithdrawError::CouponError {
+                            burn_id: self.get_burn_id(),
+                            err,
+                        })
+                    }
                 }
             }
-            Err((code, msg)) => Err(WithdrawError::SigningWithEcdsaFailed { code, msg }),
+            Err((code, msg)) => Err(WithdrawError::SigningWithEcdsaFailed {
+                burn_id: self.get_burn_id(),
+                code,
+                msg,
+            }),
         }
     }
 

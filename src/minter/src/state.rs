@@ -284,7 +284,7 @@ impl State {
     }
 
     pub fn record_or_retry_withdrawal_burned_event(&mut self, withdrawal: WithdrawalEvent) {
-        let key = withdrawal.id;
+        let key = withdrawal.get_burn_id();
 
         match self.withdrawal_burned_events.contains_key(&key) {
             // if it does not exist - add it
@@ -303,7 +303,7 @@ impl State {
     }
 
     pub fn record_withdrawal_redeemed_event(&mut self, mut withdrawal: WithdrawalEvent) {
-        let key = withdrawal.id;
+        let key = withdrawal.get_burn_id();
 
         match self.withdrawal_burned_events.remove(&key) {
             Some(_) => {

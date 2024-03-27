@@ -6,10 +6,9 @@ use minter::{
     deposit::{get_latest_signature, mint_cksol, scrap_signature_range, scrap_signatures},
     lifecycle::{post_upgrade as lifecycle_post_upgrade, MinterArg},
     logs::INFO,
-    state::event::EventType,
-    state::{lazy_call_ecdsa_public_key, read_state, State, STATE},
+    state::{event::EventType, lazy_call_ecdsa_public_key, read_state, State, STATE},
     storage,
-    withdraw::{withdraw_cksol, Coupon, WithdrawError},
+    withdraw::{withdraw_cksol, Coupon, CouponError, WithdrawError},
 };
 
 use candid::candid_method;
@@ -120,7 +119,10 @@ pub async fn get_address() -> (String, String) {
 ///
 /// dfx canister call minter withdraw "(\"HS6NTv6GBVSLct8dsimRWRvjczJTAgfgDJt8VpR8wtGm\", 100_000)" --identity $USER_PRINCIPAL_NAME
 #[update]
-async fn withdraw(solana_address: String, withdraw_amount: candid::Nat) -> Coupon {
+async fn withdraw(
+    solana_address: String,
+    withdraw_amount: candid::Nat,
+) -> Result<Coupon, WithdrawError> {
     let caller = validate_caller_not_anonymous();
 
     withdraw_cksol(
@@ -154,7 +156,7 @@ async fn get_ledger_id() -> String {
 }
 
 #[query]
-async fn verify(coupon: Coupon) -> Result<bool, WithdrawError> {
+async fn verify(coupon: Coupon) -> Result<bool, CouponError> {
     coupon.verify()
 }
 

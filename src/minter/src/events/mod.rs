@@ -125,16 +125,16 @@ impl DepositEvent {
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Encode, Decode, Serialize)]
 pub struct WithdrawalEvent {
-    #[n(0)]
-    pub id: u64,
     #[cbor(n(1), with = "crate::cbor::principal")]
     pub from_icp_address: Principal,
     #[n(2)]
     pub to_sol_address: String,
     #[n(3)]
     pub amount: u64,
+    #[n(0)]
+    burn_id: u64,
     #[n(4)]
-    burned_timestamp: Option<u64>,
+    burn_timestamp: Option<u64>,
     #[n(5)]
     icp_burn_block_index: Option<u64>,
     #[n[6]]
@@ -144,21 +144,25 @@ pub struct WithdrawalEvent {
 }
 
 impl WithdrawalEvent {
-    pub fn new(withdraw_id: u64, from: Principal, to_sol_address: String, amount: u64) -> Self {
+    pub fn new(burn_id: u64, from: Principal, to_sol_address: String, amount: u64) -> Self {
         WithdrawalEvent {
-            id: withdraw_id,
             from_icp_address: from,
             to_sol_address,
             amount,
-            burned_timestamp: None,
+            burn_id,
+            burn_timestamp: None,
             icp_burn_block_index: None,
             coupon: None,
             retry: Retriable(0),
         }
     }
 
+    pub fn get_burn_id(&self) -> u64 {
+        self.burn_id
+    }
+
     pub fn update_after_burn(&mut self, timestamp: u64, block_index: u64) {
-        self.burned_timestamp = Some(timestamp);
+        self.burn_timestamp = Some(timestamp);
         self.icp_burn_block_index = Some(block_index);
     }
 
