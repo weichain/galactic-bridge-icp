@@ -122,7 +122,7 @@ impl SolRpcClient {
     // https://solana.com/docs/rpc/http/getsignaturesforaddress
     pub async fn get_signatures_for_address(
         &self,
-        limit: u64,
+        limit: u8,
         before: Option<&String>,
         until: &String,
     ) -> Result<Vec<SignatureResponse>, SolRpcError> {
@@ -150,7 +150,7 @@ impl SolRpcClient {
 
         // The effective size estimate is the size of the response we expect to get from the RPC
         let effective_size_estimate: u64 =
-            limit * SIGNATURE_RESPONSE_SIZE_ESTIMATE + HEADER_SIZE_LIMIT;
+            (limit as u64) * SIGNATURE_RESPONSE_SIZE_ESTIMATE + HEADER_SIZE_LIMIT;
 
         match self.rpc_call(&payload, effective_size_estimate).await {
             Ok(response) => {

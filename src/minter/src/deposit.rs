@@ -16,8 +16,8 @@ use icrc_ledger_types::icrc1::transfer::TransferError;
 use num_traits::ToPrimitive;
 use std::collections::HashMap;
 
-const GET_SIGNATURES_BY_ADDRESS_LIMIT: u64 = 10;
-const GET_TRANSACTIONS_LIMIT: u64 = 5;
+const GET_SIGNATURES_BY_ADDRESS_LIMIT: u8 = 10;
+const GET_TRANSACTIONS_LIMIT: u8 = 5;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DepositError {
@@ -123,7 +123,7 @@ pub async fn scrap_signature_range() {
 async fn process_signature_range_with_limit(
     rpc_client: &SolRpcClient,
     range: SolanaSignatureRange,
-    limit: Option<u64>,
+    limit: Option<u8>,
 ) {
     let limit = limit.unwrap_or(GET_SIGNATURES_BY_ADDRESS_LIMIT);
     let mut before_signature = range.before_sol_sig.to_string();
@@ -209,7 +209,7 @@ pub async fn scrap_signatures() {
 async fn process_signatures_with_limit(
     rpc_client: &SolRpcClient,
     signatures_map: &HashMap<String, SolanaSignature>,
-    limit: Option<u64>,
+    limit: Option<u8>,
 ) -> Vec<(SolanaSignature, GetTransactionResponse)> {
     let limit = limit.unwrap_or(GET_TRANSACTIONS_LIMIT);
     let mut transactions: Vec<(SolanaSignature, GetTransactionResponse)> = Vec::new();
