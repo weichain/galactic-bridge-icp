@@ -138,8 +138,10 @@ pub struct WithdrawalEvent {
     #[n(5)]
     icp_burn_block_index: Option<u64>,
     #[n[6]]
+    #[serde(skip_serializing)]
     coupon: Option<Coupon>,
     #[n(7)]
+    #[serde(skip_serializing)]
     pub retry: Retriable,
 }
 
