@@ -4,6 +4,7 @@
 dfx deploy minter --upgrade-unchanged --argument "
   (variant {
     Upgrade = record {
+      ecdsa_key_name = opt \"test_key_1\";
     }
   })
-" --yes
+" --yes --network=ic --identity="$DEPLOYER_PRINCIPAL_NAME"

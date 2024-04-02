@@ -6,12 +6,14 @@ use minter::{
     deposit::{get_latest_signature, mint_cksol, scrap_signature_range, scrap_signatures},
     lifecycle::{post_upgrade as lifecycle_post_upgrade, MinterArg},
     logs::INFO,
+    // sol_rpc_client::types::Error,
     state::{event::EventType, lazy_call_ecdsa_public_key, read_state, State, STATE},
     storage,
     withdraw::{withdraw_cksol, Coupon, CouponError, WithdrawError},
 };
 
 use candid::candid_method;
+use ic_cdk::api::management_canister::http_request::{HttpResponse, TransformArgs};
 use ic_cdk_macros::{init, post_upgrade, pre_upgrade, query, update};
 use num_traits::cast::ToPrimitive;
 use std::time::Duration;
@@ -125,10 +127,22 @@ async fn withdraw(
     )
     .await
 }
+//////////////////////////
+#[query(hidden = true)]
+fn cleanup_response(mut args: TransformArgs) -> HttpResponse {
+    // The response header contain non-deterministic fields that make it impossible to reach consensus!
+    // Errors seem deterministic and do not contain data that can break consensus.
+    args.response.headers.clear();
+
+    args.response
+}
 
 #[query]
-fn get_state() {
-    read_state(|s| ic_canister_log::log!(INFO, "state: {:?}", s));
+fn get_state() -> String {
+    read_state(|s| {
+        ic_canister_log::log!(INFO, "state: {:?}", s);
+        s.to_string()
+    })
 }
 
 #[query]

@@ -373,6 +373,82 @@ impl State {
     }
 }
 
+impl std::fmt::Display for State {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Format Solana config
+        writeln!(f, "Solana Network: {:?}", self.solana_network)?;
+        writeln!(
+            f,
+            "Solana Contract Address: {}",
+            self.solana_contract_address
+        )?;
+        writeln!(
+            f,
+            "Solana Initial Signature: {}",
+            self.solana_initial_signature
+        )?;
+
+        // Format ICP config
+        writeln!(f, "ECDSA Key Name: {}", self.ecdsa_key_name)?;
+        if let Some(ecdsa_public_key) = &self.ecdsa_public_key {
+            writeln!(f, "ECDSA Public Key: {:?}", ecdsa_public_key)?;
+        }
+        writeln!(f, "Ledger ID: {}", self.ledger_id)?;
+        writeln!(
+            f,
+            "Minimum Withdrawal Amount: {}",
+            self.minimum_withdrawal_amount
+        )?;
+
+        // Format Scrapper config
+        if let Some(solana_last_known_signature) = &self.solana_last_known_signature {
+            writeln!(
+                f,
+                "Solana Last Known Signature: {}",
+                solana_last_known_signature
+            )?;
+        }
+        writeln!(
+            f,
+            "Solana Signature Ranges: {:?}",
+            self.solana_signature_ranges
+        )?;
+        writeln!(f, "Solana Signatures: {:?}", self.solana_signatures)?;
+
+        // Format invalid events
+        writeln!(f, "Invalid Events: {:?}", self.invalid_events)?;
+        writeln!(f, "Accepted Events: {:?}", self.accepted_events)?;
+        writeln!(f, "Minted Events: {:?}", self.minted_events)?;
+
+        // Format withdrawal events
+        writeln!(
+            f,
+            "Withdrawal Burned Events: {:?}",
+            self.withdrawal_burned_events
+        )?;
+        writeln!(
+            f,
+            "Withdrawal Redeemed Events: {:?}",
+            self.withdrawal_redeemed_events
+        )?;
+
+        // Format withdrawing principals
+        writeln!(
+            f,
+            "Withdrawing Principals: {:?}",
+            self.withdrawing_principals
+        )?;
+
+        // Format counters
+        writeln!(f, "Deposit ID Counter: {}", self.deposit_id_counter)?;
+        writeln!(f, "Burn ID Counter: {}", self.burn_id_counter)?;
+        writeln!(f, "HTTP Request Counter: {}", self.http_request_counter)?;
+
+        // Format active tasks
+        writeln!(f, "Active Tasks: {:?}", self.active_tasks)
+    }
+}
+
 pub fn read_state<R>(f: impl FnOnce(&State) -> R) -> R {
     STATE.with(|s| f(s.borrow().as_ref().expect("BUG: state is not initialized")))
 }

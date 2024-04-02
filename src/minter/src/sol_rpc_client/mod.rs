@@ -1,13 +1,13 @@
 use crate::{
     lifecycle::SolanaNetwork,
-    sol_rpc_client::providers::{RpcNodeProvider, MAINNET_PROVIDERS, TESTNET_PROVIDERS},
-    sol_rpc_client::requests::{
-        GetSignaturesForAddressRequestOptions, GetTransactionRequestOptions,
-    },
-    sol_rpc_client::responses::{GetTransactionResponse, JsonRpcResponse, SignatureResponse},
-    sol_rpc_client::types::{
-        ConfirmationStatus, RpcMethod, HEADER_SIZE_LIMIT, SIGNATURE_RESPONSE_SIZE_ESTIMATE,
-        TRANSACTION_RESPONSE_SIZE_ESTIMATE,
+    sol_rpc_client::{
+        providers::{RpcNodeProvider, MAINNET_PROVIDERS, TESTNET_PROVIDERS},
+        requests::{GetSignaturesForAddressRequestOptions, GetTransactionRequestOptions},
+        responses::{GetTransactionResponse, JsonRpcResponse, SignatureResponse},
+        types::{
+            ConfirmationStatus, RpcMethod, HEADER_SIZE_LIMIT, SIGNATURE_RESPONSE_SIZE_ESTIMATE,
+            TRANSACTION_RESPONSE_SIZE_ESTIMATE,
+        },
     },
     state::{mutate_state, read_state, State},
 };
@@ -15,7 +15,7 @@ use crate::{
 use ic_cdk::api::{
     call::RejectionCode,
     management_canister::http_request::{
-        http_request, CanisterHttpRequestArgument, HttpHeader, HttpMethod,
+        http_request, CanisterHttpRequestArgument, HttpHeader, HttpMethod, TransformContext,
     },
 };
 use icrc_ledger_types::icrc1::transfer::Memo;
@@ -102,7 +102,10 @@ impl SolRpcClient {
                 value: "application/json".to_string(),
             }],
             body: Some(payload.as_bytes().to_vec()),
-            transform: None,
+            transform: Some(TransformContext::from_name(
+                "cleanup_response".to_owned(),
+                vec![],
+            )),
         };
 
         match http_request(request, cycles).await {

@@ -79,14 +79,14 @@ pub async fn get_latest_signature() {
     {
         Ok(signatures) => match signatures.len() {
             0 => {
-                ic_canister_log::log!(DEBUG, "\nNo new signatures found")
+                ic_canister_log::log!(DEBUG, "\nNo new signatures found");
             }
             1 => {
                 let newest_sig = signatures[0].signature.to_string();
                 process_new_solana_signature_range(&newest_sig, &until_signature);
             }
             _ => {
-                ic_canister_log::log!(INFO, "\nUnexpected behaviour",);
+                ic_canister_log::log!(INFO, "\nUnexpected behaviour");
             }
         },
         Err(error) => {

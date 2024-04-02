@@ -91,9 +91,9 @@ if $CREATE_MINTER; then
       (variant {
         Init = record {
           solana_network = variant { Testnet };
-          solana_contract_address = \"7PkxG43UrwKPtET5TBhgT4YZwsGr8R77j9CVrroDqg5m\";
-          solana_initial_signature = \"2mKYvViaoudLNVPQ4Bggs3nCfQJyFoTo9gCAC7gYBnrp3t8VqQnEyCmb5W3vzcgsXVH4PfLFnMZoTAq1cwuKM4g6\";
-          ecdsa_key_name = \"dfx_test_key\";
+          solana_contract_address = \"AAJL4DeXnWBNRowWjvpkAgwtAACpz6NfaA1T2p8Hrpy\";
+          solana_initial_signature = \"33Mgkv8i55QPoRth1aqB8uUxemGdF1vc6uPVNrwQzopfX5AwvzN2oV5wSkA8gQD1Er9jAs3EMgkxDj4jkjnCoUrT\";
+          ecdsa_key_name = \"test_key_1\";
           ledger_id = principal \"$(dfx canister id ledger --network="$NETWORK")\";
           minimum_withdrawal_amount = 100;
         }
