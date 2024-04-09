@@ -88,7 +88,7 @@ dfx canister call ledger icrc1_total_supply
 
 dfx canister call ledger icrc2_approve "(record {
   spender = record { owner = principal \"$(dfx canister id minter)\" };
-  amount = 1_000_000_000;
+  amount = 100_000_000;
 })" --identity $USER_PRINCIPAL_NAME
 
 # provide solana address and amount
@@ -102,7 +102,7 @@ Coupon Example:
     recovery_id = opt (0 : nat8);
     /// The hexadecimal representation of the ICP public key in non compressed format.
     icp_public_key_hex = "04de48381e1b54e2463cafdcafc3aaf7d99b1c512a16ac60e6415514d07ab78d6010b31fc919cc196b82ede54859f1d9cd69258f83b5d5bb146a77f326b9a723ab";
-      /// The message associated with the coupon.
+    /// The message associated with the coupon.
     /// This message typically contains details about the withdrawal event.
     message = "{"from_icp_address":"svq52-4c5cd-olo3w-r6b37-jizpw-kixdx-uarhl-nolu3-gcikk-nza7z-yae","to_sol_address":"8nZLXraZUARNmU3P8PKbJMS7NYs7aEyw6d1aQx1km3t2","amount":100000,"burn_id":2,"burn_timestamp":1711616761296437000,"icp_burn_block_index":106}";
     /// The signature of the coupon.

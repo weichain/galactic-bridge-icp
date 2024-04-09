@@ -17,7 +17,7 @@ use num_traits::ToPrimitive;
 use std::collections::HashMap;
 
 const GET_SIGNATURES_BY_ADDRESS_LIMIT: u8 = 10;
-const GET_TRANSACTIONS_LIMIT: u8 = 5;
+const GET_TRANSACTIONS_LIMIT: u8 = 1;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DepositError {

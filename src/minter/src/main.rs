@@ -145,6 +145,22 @@ fn get_state() -> String {
     })
 }
 
+use std::fmt::Write;
+#[query]
+fn get_storage() -> String {
+    let events = minter::storage::get_storage_events();
+    let mut result = String::new();
+    for event in events {
+        write!(
+            &mut result,
+            "Event(timestamp: {}, payload: {:?})\n",
+            event.timestamp, event.payload
+        )
+        .unwrap();
+    }
+    result
+}
+
 #[query]
 fn get_active_tasks() {
     read_state(|s| ic_canister_log::log!(INFO, "active_tasks: {:?}", s.active_tasks));

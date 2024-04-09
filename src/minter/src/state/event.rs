@@ -86,7 +86,7 @@ pub enum EventType {
     },
 }
 
-#[derive(Encode, Decode, Debug, PartialEq, Eq)]
+#[derive(Encode, Decode, Debug, PartialEq, Eq, Clone)]
 pub struct Event {
     /// The canister time at which the minter generated this event.
     #[n(0)]

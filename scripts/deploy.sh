@@ -52,6 +52,7 @@ if $CREATE_LEDGER; then
         Init = record {
           token_name = \"ICP Solana\";
           token_symbol = \"ckSol\";
+          decimals = opt 9;
           minting_account = record {
             owner = principal \"$(dfx canister id minter --network="$NETWORK")\";
           };

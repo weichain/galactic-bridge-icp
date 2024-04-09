@@ -66,6 +66,7 @@ service : (MinterArg) -> {
   get_address : () -> (text, text);
   get_ledger_id : () -> (text) query;
   get_state : () -> (text) query;
+  get_storage : () -> (text) query;
   verify : (Coupon) -> (Result) query;
   withdraw : (text, nat) -> (Result_1);
-}
+};

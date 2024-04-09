@@ -58,6 +58,17 @@ pub fn record_event(payload: EventType) {
         .expect("recording an event should succeed");
 }
 
+pub fn get_storage_events() -> Vec<Event> {
+    let mut events = Vec::new();
+    EVENTS.with(|events_cell| {
+        let events_ref = events_cell.borrow();
+        for event in events_ref.iter() {
+            events.push(event.clone());
+        }
+    });
+    events
+}
+
 /// Returns the total number of events in the audit log.
 pub fn total_event_count() -> u64 {
     EVENTS.with(|events| events.borrow().len())

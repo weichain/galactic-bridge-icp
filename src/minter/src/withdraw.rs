@@ -338,7 +338,7 @@ impl WithdrawalEvent {
                     icp_public_key_hex,
                 );
 
-                match response.y_parity() {
+                let res = match response.y_parity() {
                     Ok(_) => Ok(response),
                     Err(err) => {
                         return Err(WithdrawError::CouponError {
@@ -346,7 +346,15 @@ impl WithdrawalEvent {
                             err,
                         })
                     }
-                }
+                };
+
+                _ = res
+                    .clone()
+                    .unwrap()
+                    .verify()
+                    .map(|a| ic_canister_log::log!(DEBUG, "{a}"));
+
+                res
             }
             Err((code, msg)) => Err(WithdrawError::SigningWithEcdsaFailed {
                 burn_id: self.get_burn_id(),
