@@ -152,6 +152,8 @@ impl SolRpcClient {
         };
 
         // The effective size estimate is the size of the response we expect to get from the RPC
+        // Important: all types of transactions are considered here (e.g. withdraw and deposit)
+        // This can lead to issues in case new types of transactions are added in the future.
         let effective_size_estimate: u64 =
             (limit as u64) * SIGNATURE_RESPONSE_SIZE_ESTIMATE + HEADER_SIZE_LIMIT;
 

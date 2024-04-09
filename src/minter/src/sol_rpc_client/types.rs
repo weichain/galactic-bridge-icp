@@ -15,7 +15,7 @@ pub const MAX_PAYLOAD_SIZE: u64 = HTTP_MAX_SIZE - HEADER_SIZE_LIMIT;
 pub const SIGNATURE_RESPONSE_SIZE_ESTIMATE: u64 = 250;
 
 // In case no memo is set transaction object should be around 1100 bytes long.
-pub const TRANSACTION_RESPONSE_SIZE_ESTIMATE: u64 = 1500;
+pub const TRANSACTION_RESPONSE_SIZE_ESTIMATE: u64 = 2000;
 
 #[derive(Debug, Clone, Copy)]
 pub enum RpcMethod {
