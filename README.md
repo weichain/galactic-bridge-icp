@@ -7,7 +7,7 @@ Deploys ledger and minter
 dfx start --background
 
 ./scripts/export.sh
-./scripts/deploy_all.sh
+./scripts/deploy.sh --all
 ```
 
 ## (Re)Generating candid file (minter.did)
@@ -62,93 +62,76 @@ Coupon holds message(address to receive asset, amount, etc.), signature and publ
 
 # Help
 
-## get_address
-Returns Threshold ECDSA address ("ecdsa_public_key") in 3 formats:
-1) compressed public key (size: 33 bytes, generated from icp)
-2) uncompressed public key (size: 64 bytes, generated from compressed version via "libsecp256k1" library)
-3) ethereum address (size: 20 bytes)
-
-```bash
-dfx canister call minter get_address
-```
-
-## sign message
-Signs a predefined message with "sign_with_ecdsa":
-```
-    let coupon = Coupon {
-        address: "9gVndQ5SdugdFfGzyuKmePLRJZkCreKZ2iUTEg4agR5g".to_string(),
-        amount: 10_000_000,
-    };
-```
-
-Returns:
-1) coupon in json format
-2) hex of coupon
-3) signature
-
-```bash
-dfx canister call minter sign
-```
-
-## verify
-Input:
-1) signature
-2) message
-3) compressed key pair (via "k256" library)
-
-Return:
-true/false
-
-Example:
-```bash
-dfx canister call minter verify \
-  '("fff722f41eb1cae151458c2d9acf16695984d1376a6a0a6ab56a385204f889370aec600906f278c5d9522d1df16ab50940827f96d7f62f61cd2ba33b28f2b7df", "{\"address\":\"9gVndQ5SdugdFfGzyuKmePLRJZkCreKZ2iUTEg4agR5g\",\"amount\":10000000}", "0269b3e4f4295275d99217c8d4f31a872d7af55c671fde7b0ed293650f9d1a4115")'
-```
-
-## y_parity / recovery id
-Input:
-1) signature
-2) message
-3) compressed public key (via "k256" library)
-
-Return: 
-Recovery id -> 0/1
-
-```bash
-dfx canister call minter y_parity \
-  '("fff722f41eb1cae151458c2d9acf16695984d1376a6a0a6ab56a385204f889370aec600906f278c5d9522d1df16ab50940827f96d7f62f61cd2ba33b28f2b7df", "{\"address\":\"9gVndQ5SdugdFfGzyuKmePLRJZkCreKZ2iUTEg4agR5g\",\"amount\":10000000}", "0269b3e4f4295275d99217c8d4f31a872d7af55c671fde7b0ed293650f9d1a4115")'
-
-```
-
 ## get_ledger_id
 
 ```
 dfx canister call minter get_ledger_id
 ```
 
-## mint
-Mint method manually generates ckSol asset.
-This functionality will become part of solana scrapper.
+## get_address
+Returns Threshold ECDSA address ("ecdsa_public_key") in 3 formats:
+1) compressed public key (size: 33 bytes, generated from icp)
+2) uncompressed public key (size: 64 bytes, generated from compressed version via "libsecp256k1" library)
 
 ```bash
-dfx canister call minter mint "(principal \"$USER_PRINCIPAL\", 1_000)"
-
-dfx canister call ledger icrc1_balance_of "(record { owner = principal \"$USER_PRINCIPAL\" })"
+dfx canister call minter get_address
 ```
 
-## burn
-Mint method manually removes ckSol asset.
-This functionality will become part of the withdraw flow.
+## withdraw
+Withdraw burns cksol and provides a coupon
 
 ```bash
-dfx canister call ledger icrc2_approve "(record {
-    spender = record { owner = principal \"$(dfx canister id minter)\" };
-    amount = 1_000_000;
-  })" --identity $USER_PRINCIPAL_NAME
-
-dfx canister call minter burn "(1_000)" --identity $USER_PRINCIPAL_NAME
-
-dfx canister call ledger icrc1_balance_of "(record { owner = principal \"$USER_PRINCIPAL\" })"
-
+dfx canister call ledger icrc1_balance_of "(record {
+  owner = principal \"$USER_PRINCIPAL\"
+})"
 dfx canister call ledger icrc1_total_supply
+
+dfx canister call ledger icrc2_approve "(record {
+  spender = record { owner = principal \"$(dfx canister id minter)\" };
+  amount = 100_000_000;
+})" --identity $USER_PRINCIPAL_NAME
+
+# provide solana address and amount
+dfx canister call minter withdraw "(\"HS6NTv6GBVSLct8dsimRWRvjczJTAgfgDJt8VpR8wtGm\", 100_000)" --identity $USER_PRINCIPAL_NAME
 ```
+
+Coupon Example:
+```rust
+{
+    /// The recovery ID (y parity) for signature
+    recovery_id = opt (0 : nat8);
+    /// The hexadecimal representation of the ICP public key in non compressed format.
+    icp_public_key_hex = "04de48381e1b54e2463cafdcafc3aaf7d99b1c512a16ac60e6415514d07ab78d6010b31fc919cc196b82ede54859f1d9cd69258f83b5d5bb146a77f326b9a723ab";
+    /// The message associated with the coupon.
+    /// This message typically contains details about the withdrawal event.
+    message = "{"from_icp_address":"svq52-4c5cd-olo3w-r6b37-jizpw-kixdx-uarhl-nolu3-gcikk-nza7z-yae","to_sol_address":"8nZLXraZUARNmU3P8PKbJMS7NYs7aEyw6d1aQx1km3t2","amount":100000,"burn_id":2,"burn_timestamp":1711616761296437000,"icp_burn_block_index":106}";
+    /// The signature of the coupon.
+    signature_hex = "ac30c685a756feafbe9e34939054fb8e7b0879039f18eb536a06a12483f0f8d25f4e6fc29cf5fbb9742d0e9fff39dbf3bbc3adf3b56477adb614417c4157168a";
+    /// The hash of the message associated with the coupon.
+    message_hash = "8278c60c27f95ccb2b0956c4b7ed9ef90e1ec67d3d8cf88cec39632d3f0d4bf0";
+}
+```
+No matter who executes the withdrawal process on the Solana side, the asset will be reimbursed to the Solana address provided during the minter canister call.
+
+## get_state
+
+```
+dfx canister call minter get_state
+```
+
+## get_active_tasks
+
+```
+dfx canister call minter get_active_tasks
+```
+
+# Known Issues
+1) If the user's withdrawal process succeeds in burning ckSOL but fails during signing, the user will not receive a coupon.
+   This issue is partially addressed by storing the burn transaction with a burn_id for easy referencing. However, there is
+   currently no API method provided for retrying coupon generation.
+2) Solana Testnet and Devnet do not retain transactions and transaction signatures for an extended period. This can lead to
+   issues in the Solana parser, such as encountering existing signatures without corresponding transaction data. Currently,
+   any parsing issue encountered is retried up to 100 times before being dropped. It may be beneficial to implement a mechanism
+   with progressively longer retry periods for improved handling of such issues.".
+3) Solana RPC provider free version has a request limit. At this point batching for transaction calls is not possible on mainnet!
+   Each call is duplicated 13 times for each node on the subnet.
