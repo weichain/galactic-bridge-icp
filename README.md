@@ -17,7 +17,7 @@ dfx start --background
 
 # Flow examples
 
-## Sol to ckSol
+## Sol to gSol
 ```
 ┌────┐ ┌───────────────┐           ┌──────────┐┌──────────┐
 │User│ │Solana Contract│           │  Minter  ││  Ledger  │
@@ -36,7 +36,7 @@ dfx start --background
 └────┘ └───────────────┘           └──────────┘└──────────┘
 ```
 
-## ckSol to Sol
+## gSol to Sol
 ```
  ┌───────────────┐ ┌────┐             ┌──────────┐┌──────────┐
  │Solana Contract│ │User│             │  Minter  ││  Ledger  │
@@ -78,7 +78,7 @@ dfx canister call minter get_address
 ```
 
 ## withdraw
-Withdraw burns cksol and provides a coupon
+Withdraw burns gsol and provides a coupon
 
 ```bash
 dfx canister call ledger icrc1_balance_of "(record {
@@ -126,7 +126,7 @@ dfx canister call minter get_active_tasks
 ```
 
 # Known Issues
-1) If the user's withdrawal process succeeds in burning ckSOL but fails during signing, the user will not receive a coupon.
+1) If the user's withdrawal process succeeds in burning gSOL but fails during signing, the user will not receive a coupon.
    This issue is partially addressed by storing the burn transaction with a burn_id for easy referencing. However, there is
    currently no API method provided for retrying coupon generation.
 2) Solana Testnet and Devnet do not retain transactions and transaction signatures for an extended period. This can lead to

@@ -1,6 +1,6 @@
 use crate::{
     constants::{
-        MINT_CKSOL_RETRY_LIMIT, SOLANA_SIGNATURE_RANGES_RETRY_LIMIT, SOLANA_SIGNATURE_RETRY_LIMIT,
+        MINT_GSOL_RETRY_LIMIT, SOLANA_SIGNATURE_RANGES_RETRY_LIMIT, SOLANA_SIGNATURE_RETRY_LIMIT,
     },
     events::{DepositEvent, SolanaSignature, SolanaSignatureRange},
     guard::TimerGuard,
@@ -26,7 +26,7 @@ pub enum DepositError {
     SignatureNotFound(String),
     InvalidDepositData(String),
     NonDepositTransaction(String),
-    MintingCkSolFailed(TransferError),
+    MintingGSolFailed(TransferError),
     SendingMessageToLedgerFailed { id: String, code: i32, msg: String },
 }
 
@@ -48,8 +48,8 @@ impl std::fmt::Display for DepositError {
             DepositError::NonDepositTransaction(sig) => {
                 write!(f, "Signature {sig} : non-Deposit transaction found")
             }
-            DepositError::MintingCkSolFailed(err) => {
-                write!(f, "Failed to mint ckSOL: {err:?}")
+            DepositError::MintingGSolFailed(err) => {
+                write!(f, "Failed to mint gSOL: {err:?}")
             }
             DepositError::SendingMessageToLedgerFailed { id, code, msg } => {
                 write!(
@@ -303,11 +303,11 @@ fn process_transaction_logs(
     }
 }
 
-pub async fn mint_cksol() {
+pub async fn mint_gsol() {
     use icrc_ledger_client_cdk::{CdkRuntime, ICRC1Client};
     use icrc_ledger_types::icrc1::{account::Account, transfer::TransferArg};
 
-    let _guard = match TimerGuard::new(TaskType::MintCkSol) {
+    let _guard = match TimerGuard::new(TaskType::MintGSol) {
         Ok(guard) => guard,
         Err(_) => return,
     };
@@ -315,12 +315,12 @@ pub async fn mint_cksol() {
     let ledger_canister_id = read_state(|s| s.ledger_id);
     // filter out all events that have reached the retry limit
     let filtered_events = HashMapUtils::filter(&read_state(|s| s.accepted_events.clone()), |e| {
-        !e.retry.is_retry_limit_reached(MINT_CKSOL_RETRY_LIMIT)
+        !e.retry.is_retry_limit_reached(MINT_GSOL_RETRY_LIMIT)
     });
 
     ic_canister_log::log!(
         DEBUG,
-        "\nMinting ckSOL:\n{}",
+        "\nMinting gSOL:\n{}",
         HashMapUtils::format_keys_as_string(&filtered_events)
     );
 
@@ -351,7 +351,7 @@ pub async fn mint_cksol() {
                 process_minted_event(&event);
             }
             Ok(Err(err)) => {
-                process_accepted_event(&event, Some(DepositError::MintingCkSolFailed(err.clone())));
+                process_accepted_event(&event, Some(DepositError::MintingGSolFailed(err.clone())));
             }
             Err(err) => {
                 process_accepted_event(

@@ -51,7 +51,7 @@ if $CREATE_LEDGER; then
       (variant {
         Init = record {
           token_name = \"ICP Solana\";
-          token_symbol = \"ckSol\";
+          token_symbol = \"gSol\";
           decimals = opt 9;
           minting_account = record {
             owner = principal \"$(dfx canister id minter --network="$NETWORK")\";

@@ -33,7 +33,7 @@ pub enum TaskType {
     GetLatestSignature,
     ScrapSignatureRanges,
     ScrapSignatures,
-    MintCkSol,
+    MintGSol,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -63,7 +63,7 @@ pub struct State {
     // minted events
     pub minted_events: HashMap<String, DepositEvent>,
 
-    // withdrawal with burned ckSol
+    // withdrawal with burned gSol
     pub withdrawal_burned_events: HashMap<u64, WithdrawalEvent>,
     // withdrawal with generated coupon
     pub withdrawal_redeemed_events: HashMap<u64, WithdrawalEvent>,

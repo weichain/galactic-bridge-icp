@@ -25,7 +25,7 @@ use sha2::{Digest, Sha256};
 
 #[derive(CandidType, Debug, Clone, PartialEq, Eq)]
 pub enum WithdrawError {
-    BurningCkSolFailed(TransferFromError),
+    BurningGSolFailed(TransferFromError),
     SendingMessageToLedgerFailed {
         id: String,
         code: i32,
@@ -47,8 +47,8 @@ pub enum WithdrawError {
 impl std::fmt::Display for WithdrawError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            WithdrawError::BurningCkSolFailed(err) => {
-                write!(f, "Failed to burn ckSOL: {err:?}")
+            WithdrawError::BurningGSolFailed(err) => {
+                write!(f, "Failed to burn gSOL: {err:?}")
             }
             WithdrawError::SendingMessageToLedgerFailed { id, code, msg } => {
                 write!(
@@ -105,7 +105,7 @@ impl std::fmt::Display for CouponError {
     }
 }
 
-pub async fn withdraw_cksol(
+pub async fn withdraw_gsol(
     from: Principal,
     to: String,
     amount: u64,
@@ -117,7 +117,7 @@ pub async fn withdraw_cksol(
         ))
     });
 
-    let mut event = burn_cksol(&from, &to, amount).await.map_err(|err| err)?;
+    let mut event = burn_gsol(&from, &to, amount).await.map_err(|err| err)?;
     let coupon = generate_coupon(&mut event).await.map_err(|err| err)?;
 
     Ok(coupon)
@@ -152,7 +152,7 @@ pub async fn get_coupon(from: Principal, burn_id: u64) -> Result<Coupon, Withdra
     }
 }
 
-async fn burn_cksol(
+async fn burn_gsol(
     from: &Principal,
     to: &String,
     amount: u64,
@@ -194,7 +194,7 @@ async fn burn_cksol(
 
             Ok(event.clone())
         }
-        Ok(Err(err)) => Err(WithdrawError::BurningCkSolFailed(err)),
+        Ok(Err(err)) => Err(WithdrawError::BurningGSolFailed(err)),
         Err(err) => Err(WithdrawError::SendingMessageToLedgerFailed {
             id: ledger_canister_id.to_string(),
             code: err.0,

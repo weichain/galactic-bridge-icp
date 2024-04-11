@@ -3,7 +3,7 @@ use crate::state::{DepositEvent, SolanaSignature, SolanaSignatureRange, Withdraw
 
 use minicbor::{Decode, Encode};
 
-/// The event describing the ckSol minter state transition.
+/// The event describing the gSol minter state transition.
 #[derive(Clone, Debug, Encode, Decode, PartialEq, Eq)]
 pub enum EventType {
     /// The minter initialization event.
@@ -66,13 +66,13 @@ pub enum EventType {
     },
     #[n(11)]
     MintedEvent {
-        /// The minted ckSol event.
+        /// The minted gSol event.
         #[n(0)]
         event_source: DepositEvent,
     },
     #[n(12)]
     WithdrawalBurnedEvent {
-        /// The withdrawal ckSOL burned event.
+        /// The withdrawal gSOL burned event.
         #[n(0)]
         event_source: WithdrawalEvent,
         #[n(1)]
@@ -80,7 +80,7 @@ pub enum EventType {
     },
     #[n(13)]
     WithdrawalRedeemedEvent {
-        /// The withdrawal ckSol event.
+        /// The withdrawal gSol event.
         #[n(0)]
         event_source: WithdrawalEvent,
     },

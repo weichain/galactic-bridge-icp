@@ -1,15 +1,15 @@
 use minter::{
     constants::{
-        GET_LATEST_SOLANA_SIGNATURE, MINT_CKSOL, SCRAPPING_SOLANA_SIGNATURES,
+        GET_LATEST_SOLANA_SIGNATURE, MINT_GSOL, SCRAPPING_SOLANA_SIGNATURES,
         SCRAPPING_SOLANA_SIGNATURE_RANGES,
     },
-    deposit::{get_latest_signature, mint_cksol, scrap_signature_range, scrap_signatures},
+    deposit::{get_latest_signature, mint_gsol, scrap_signature_range, scrap_signatures},
     lifecycle::{post_upgrade as lifecycle_post_upgrade, MinterArg},
     logs::INFO,
     // sol_rpc_client::types::Error,
     state::{event::EventType, lazy_call_ecdsa_public_key, read_state, State, STATE},
     storage,
-    withdraw::{withdraw_cksol, Coupon, CouponError, WithdrawError},
+    withdraw::{withdraw_gsol, Coupon, CouponError, WithdrawError},
 };
 
 use candid::candid_method;
@@ -31,7 +31,7 @@ fn setup_timers() {
             get_latest_signature().await;
             scrap_signature_range().await;
             scrap_signatures().await;
-            mint_cksol().await;
+            mint_gsol().await;
         });
     });
 
@@ -53,9 +53,9 @@ fn setup_timers() {
         });
     });
 
-    ic_cdk_timers::set_timer_interval(MINT_CKSOL, || {
+    ic_cdk_timers::set_timer_interval(MINT_GSOL, || {
         ic_cdk::spawn(async {
-            mint_cksol().await;
+            mint_gsol().await;
         });
     });
 }
@@ -117,7 +117,7 @@ async fn withdraw(
 ) -> Result<Coupon, WithdrawError> {
     let caller = validate_caller_not_anonymous();
 
-    withdraw_cksol(
+    withdraw_gsol(
         caller,
         solana_address,
         withdraw_amount

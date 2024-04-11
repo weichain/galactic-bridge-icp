@@ -50,8 +50,8 @@ type UpgradeArg = record {
   minimum_withdrawal_amount : opt nat;
 };
 type WithdrawError = variant {
-  BurningCkSolFailed : TransferFromError;
   CouponError : record { err : CouponError; burn_id : nat64 };
+  BurningGSolFailed : TransferFromError;
   SigningWithEcdsaFailed : record {
     msg : text;
     code : RejectionCode;
@@ -69,4 +69,4 @@ service : (MinterArg) -> {
   get_storage : () -> (text) query;
   verify : (Coupon) -> (Result) query;
   withdraw : (text, nat) -> (Result_1);
-};
+}

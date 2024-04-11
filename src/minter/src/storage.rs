@@ -34,7 +34,7 @@ thread_local! {
         MemoryManager::init(DefaultMemoryImpl::default())
     );
 
-    /// The log of the ckSol state modifications.
+    /// The log of the gSol state modifications.
     static EVENTS: RefCell<EventLog> = MEMORY_MANAGER
         .with(|m|
               RefCell::new(
