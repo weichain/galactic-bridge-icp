@@ -133,3 +133,5 @@ dfx canister call minter get_active_tasks
    issues in the Solana parser, such as encountering existing signatures without corresponding transaction data. Currently,
    any parsing issue encountered is retried up to 100 times before being dropped. It may be beneficial to implement a mechanism
    with progressively longer retry periods for improved handling of such issues.".
+3) Solana RPC provider free version has a request limit. At this point batching for transaction calls is not possible on mainnet!
+   Each call is duplicated 13 times for each node on the subnet.
