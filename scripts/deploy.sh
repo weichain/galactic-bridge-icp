@@ -39,8 +39,8 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 # create canisters
-dfx canister create ledger --network=$NETWORK --identity=$DEPLOYER_PRINCIPAL_NAME
-dfx canister create minter --network=$NETWORK --identity=$DEPLOYER_PRINCIPAL_NAME
+dfx canister create ledger --network=$NETWORK --identity=$OWNER_PRINCIPAL_NAME
+dfx canister create minter --network=$NETWORK --identity=$OWNER_PRINCIPAL_NAME
 
 
 # Construct the arguments for dfx deploy command
@@ -71,7 +71,7 @@ if $CREATE_LEDGER; then
       })
     "
     --network="$NETWORK"
-    --identity="$DEPLOYER_PRINCIPAL_NAME"
+    --identity="$OWNER_PRINCIPAL_NAME"
     --upgrade-unchanged
   )
 
@@ -101,7 +101,7 @@ if $CREATE_MINTER; then
       })
     "
     --network="$NETWORK"
-    --identity="$DEPLOYER_PRINCIPAL_NAME"
+    --identity="$OWNER_PRINCIPAL_NAME"
     --upgrade-unchanged
   )
 

@@ -130,8 +130,7 @@ async fn process_signature_range_with_limit(
     let until_signature = range.until_sol_sig.to_string();
 
     let mut result: Vec<String> = Vec::new();
-    // include the first signature, call is not inclusive
-    result.push(before_signature.to_string());
+    let mut at_least_one_successful_call = false; // Flag to track if at least one call was successful
 
     loop {
         ic_canister_log::log!(
@@ -145,6 +144,13 @@ async fn process_signature_range_with_limit(
             .await
         {
             Ok(signatures) => {
+                // If at least one call was successful, add the initial element.
+                // Call is non inclusive, so we need to add the first element only once.
+                if !at_least_one_successful_call {
+                    result.push(before_signature.to_string());
+                    at_least_one_successful_call = true;
+                }
+
                 // if no signatures are available, we are done
                 if signatures.is_empty() {
                     remove_solana_signature_range(&range);
@@ -171,9 +177,12 @@ async fn process_signature_range_with_limit(
         }
     }
 
-    result
-        .iter()
-        .for_each(|s| process_solana_signature(&SolanaSignature::new(s.to_string()), None));
+    // Only process the signatures if at least one successful call was made
+    if at_least_one_successful_call {
+        result
+            .iter()
+            .for_each(|s| process_solana_signature(&SolanaSignature::new(s.to_string()), None));
+    }
 }
 
 pub async fn scrap_signatures() {
