@@ -18,14 +18,17 @@ use ic_cdk_macros::{init, post_upgrade, pre_upgrade, query, update};
 use num_traits::cast::ToPrimitive;
 use std::time::Duration;
 
+/// Sets up timers for various tasks, such as fetching latest signatures and scraping logs.
 fn setup_timers() {
+    // Set timer to fetch ECDSA public key immediately after install.
     ic_cdk_timers::set_timer(Duration::from_secs(0), || {
         ic_cdk::spawn(async {
             let _ = lazy_call_ecdsa_public_key().await;
         });
     });
 
-    // Start scraping logs immediately after the install, then repeat each operation with the interval.
+    // Set timers for scraping logs and other operations with specified intervals.
+    // These timers are started immediately after installation.
     ic_cdk_timers::set_timer(Duration::from_secs(0), || {
         ic_cdk::spawn(async {
             get_latest_signature().await;
@@ -35,6 +38,7 @@ fn setup_timers() {
         });
     });
 
+    // Set intervals for periodic tasks.
     ic_cdk_timers::set_timer_interval(GET_LATEST_SOLANA_SIGNATURE, || {
         ic_cdk::spawn(async {
             get_latest_signature().await;
@@ -60,10 +64,17 @@ fn setup_timers() {
     });
 }
 
+/// Initializes the Minter canister with the given arguments.
+///
+/// # Arguments
+///
+/// * `args` - Initialization arguments for the Minter canister.
 #[candid_method(init)]
 #[init]
 pub fn init(args: MinterArg) {
+    // Match on the initialization arguments.
     match args {
+        // If the argument is an initialization argument, initialize the state.
         MinterArg::Init(init_arg) => {
             ic_canister_log::log!(INFO, "\ninitialized minter with arg:\n{init_arg:?}");
             STATE.with(|cell| {
@@ -72,14 +83,17 @@ pub fn init(args: MinterArg) {
                     Some(State::try_from(init_arg).expect("failed to initialize minter"))
             });
         }
+        // If the argument is an upgrade argument, trap with an error message.
         MinterArg::Upgrade(_) => {
             ic_cdk::trap("cannot init canister state with upgrade args");
         }
     }
 
+    // Setup timers for periodic tasks.
     setup_timers();
 }
 
+/// Performs actions before upgrading the canister state.
 #[pre_upgrade]
 fn pre_upgrade() {
     read_state(|s| {
@@ -91,6 +105,7 @@ fn pre_upgrade() {
     });
 }
 
+/// Performs actions after upgrading the canister state.
 #[post_upgrade]
 fn post_upgrade(minter_arg: Option<MinterArg>) {
     match minter_arg {
@@ -101,15 +116,22 @@ fn post_upgrade(minter_arg: Option<MinterArg>) {
         None => lifecycle_post_upgrade(None),
     }
 
+    // Setup timers for periodic tasks after upgrade.
     setup_timers();
 }
 
-//////////////////////////
+/// Returns the compressed and uncompressed public keys.
 #[update]
 pub async fn get_address() -> (String, String) {
     read_state(|s| (s.compressed_public_key(), s.uncompressed_public_key()))
 }
 
+/// Withdraws GSOL tokens to the specified Solana address.
+///
+/// # Arguments
+///
+/// * `solana_address` - The Solana address to withdraw GSOL tokens to.
+/// * `withdraw_amount` - The amount of GSOL tokens to withdraw.
 #[update]
 async fn withdraw(
     solana_address: String,
@@ -127,16 +149,24 @@ async fn withdraw(
     )
     .await
 }
-//////////////////////////
+
+/// Cleans up the HTTP response headers to make them deterministic.
+///
+/// # Arguments
+///
+/// * `args` - Transformation arguments containing the HTTP response.
 #[query(hidden = true)]
 fn cleanup_response(mut args: TransformArgs) -> HttpResponse {
     // The response header contain non-deterministic fields that make it impossible to reach consensus!
     // Errors seem deterministic and do not contain data that can break consensus.
+
+    // Clear non-deterministic fields from the response headers.
     args.response.headers.clear();
 
     args.response
 }
 
+/// Returns the current state of the Minter canister.
 #[query]
 fn get_state() -> String {
     read_state(|s| {
@@ -145,9 +175,11 @@ fn get_state() -> String {
     })
 }
 
-use std::fmt::Write;
+/// Returns the storage events recorded in the Minter canister.
 #[query]
 fn get_storage() -> String {
+    use std::fmt::Write;
+
     let events = minter::storage::get_storage_events();
     let mut result = String::new();
     for event in events {
@@ -161,22 +193,24 @@ fn get_storage() -> String {
     result
 }
 
+/// Returns active tasks in the Minter canister.
 #[query]
 fn get_active_tasks() {
     read_state(|s| ic_canister_log::log!(INFO, "active_tasks: {:?}", s.active_tasks));
 }
 
+/// Returns ledger id.
 #[query]
 async fn get_ledger_id() -> String {
     read_state(|s| s.ledger_id.clone().to_string())
 }
 
+/// Verification method that validates coupon.
 #[query]
 async fn verify(coupon: Coupon) -> Result<bool, CouponError> {
     coupon.verify()
 }
 
-//////////////////////////
 fn main() {}
 ic_cdk_macros::export_candid!();
 

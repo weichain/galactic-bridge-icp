@@ -64,7 +64,7 @@ Coupon holds message(address to receive asset, amount, etc.), signature and publ
 
 ## get_ledger_id
 
-```
+```bash
 dfx canister call minter get_ledger_id
 ```
 
@@ -115,13 +115,19 @@ No matter who executes the withdrawal process on the Solana side, the asset will
 
 ## get_state
 
-```
+```bash
 dfx canister call minter get_state
+```
+
+## get_storage
+
+```bash
+dfx canister call minter get_storage
 ```
 
 ## get_active_tasks
 
-```
+```bash
 dfx canister call minter get_active_tasks
 ```
 
