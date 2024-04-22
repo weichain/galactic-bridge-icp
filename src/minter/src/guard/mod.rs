@@ -17,9 +17,9 @@ pub trait RequestsGuardedByPrincipal {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct PendingRetrieveEthRequests;
+pub struct PendingRetrieveSolRequests;
 
-impl RequestsGuardedByPrincipal for PendingRetrieveEthRequests {
+impl RequestsGuardedByPrincipal for PendingRetrieveSolRequests {
     fn guarded_principals(state: &mut State) -> &mut BTreeSet<Principal> {
         &mut state.withdrawing_principals
     }
@@ -62,9 +62,9 @@ impl<PR: RequestsGuardedByPrincipal> Drop for Guard<PR> {
     }
 }
 
-pub fn retrieve_eth_guard(
+pub fn retrieve_sol_guard(
     principal: Principal,
-) -> Result<Guard<PendingRetrieveEthRequests>, GuardError> {
+) -> Result<Guard<PendingRetrieveSolRequests>, GuardError> {
     Guard::new(principal)
 }
 

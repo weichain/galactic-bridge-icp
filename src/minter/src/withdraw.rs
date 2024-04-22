@@ -1,7 +1,7 @@
 use crate::{
     constants::DERIVATION_PATH,
     events::WithdrawalEvent,
-    guard::retrieve_eth_guard,
+    guard::retrieve_sol_guard,
     logs::DEBUG,
     sol_rpc_client::LedgerMemo,
     state::{audit::process_event, event::EventType, mutate_state, read_state, State},
@@ -27,7 +27,7 @@ use sha2::{Digest, Sha256};
 pub enum WithdrawError {
     BurningGSolFailed(TransferFromError),
     SendingMessageToLedgerFailed {
-        id: String,
+        ledger_id: String,
         code: i32,
         msg: String,
     },
@@ -50,10 +50,14 @@ impl std::fmt::Display for WithdrawError {
             WithdrawError::BurningGSolFailed(err) => {
                 write!(f, "Failed to burn gSOL: {err:?}")
             }
-            WithdrawError::SendingMessageToLedgerFailed { id, code, msg } => {
+            WithdrawError::SendingMessageToLedgerFailed {
+                ledger_id,
+                code,
+                msg,
+            } => {
                 write!(
                     f,
-                    "Failed to send a message to the ledger {id}: {code:?}: {msg}",
+                    "Failed to send a message to the ledger {ledger_id}: {code:?}: {msg}",
                 )
             }
             WithdrawError::SigningWithEcdsaFailed { burn_id, code, msg } => {
@@ -105,12 +109,37 @@ impl std::fmt::Display for CouponError {
     }
 }
 
+pub async fn get_withdraw_info(user: Principal) -> UserWithdrawInfo {
+    let withdrawal_redeemed_events = read_state(|s| s.withdrawal_redeemed_events.clone());
+    let mut coupons = Vec::new();
+
+    for (_, event) in withdrawal_redeemed_events.iter() {
+        if event.from_icp_address == user {
+            match event.get_coupon() {
+                Some(coupon) => coupons.push(coupon.clone()),
+                None => ic_canister_log::log!(DEBUG, "Redeemed event does NOT hold coupon"),
+            }
+        }
+    }
+
+    let withdrawal_burned_events = read_state(|s| s.withdrawal_burned_events.clone());
+    let mut burn_ids = Vec::new();
+
+    withdrawal_burned_events.iter().for_each(|(_, event)| {
+        if event.from_icp_address == user {
+            burn_ids.push(event.get_burn_id());
+        }
+    });
+
+    UserWithdrawInfo { coupons, burn_ids }
+}
+
 pub async fn withdraw_gsol(
     from: Principal,
     to: String,
     amount: u64,
 ) -> Result<Coupon, WithdrawError> {
-    let _guard = retrieve_eth_guard(from).unwrap_or_else(|e| {
+    let _guard = retrieve_sol_guard(from).unwrap_or_else(|e| {
         ic_cdk::trap(&format!(
             "Failed retrieving guard for principal {}: {:?}",
             from, e
@@ -124,7 +153,7 @@ pub async fn withdraw_gsol(
 }
 
 pub async fn get_coupon(from: Principal, burn_id: u64) -> Result<Coupon, WithdrawError> {
-    let _guard = retrieve_eth_guard(from).unwrap_or_else(|e| {
+    let _guard = retrieve_sol_guard(from).unwrap_or_else(|e| {
         ic_cdk::trap(&format!(
             "Failed retrieving guard for principal {}: {:?}",
             from, e
@@ -196,7 +225,7 @@ async fn burn_gsol(
         }
         Ok(Err(err)) => Err(WithdrawError::BurningGSolFailed(err)),
         Err(err) => Err(WithdrawError::SendingMessageToLedgerFailed {
-            id: ledger_canister_id.to_string(),
+            ledger_id: ledger_canister_id.to_string(),
             code: err.0,
             msg: err.1,
         }),
@@ -393,4 +422,14 @@ impl WithdrawalEvent {
             Err((code, msg)) => Err((code, msg)),
         }
     }
+}
+
+#[derive(
+    CandidType, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Encode, Decode, Deserialize, Serialize,
+)]
+pub struct UserWithdrawInfo {
+    #[n(0)]
+    pub coupons: Vec<Coupon>,
+    #[n(1)]
+    pub burn_ids: Vec<u64>,
 }

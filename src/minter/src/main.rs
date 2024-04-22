@@ -9,7 +9,10 @@ use minter::{
     // sol_rpc_client::types::Error,
     state::{event::EventType, lazy_call_ecdsa_public_key, read_state, State, STATE},
     storage,
-    withdraw::{withdraw_gsol, Coupon, CouponError, WithdrawError},
+    withdraw::{
+        get_coupon as get_or_regen_coupon, get_withdraw_info as get_user_withdraw_info,
+        withdraw_gsol, Coupon, CouponError, UserWithdrawInfo, WithdrawError,
+    },
 };
 
 use candid::candid_method;
@@ -150,6 +153,38 @@ async fn withdraw(
     .await
 }
 
+/// Gets coupon or tries to regenerate coupon if it is not found.
+///
+/// # Arguments
+///
+/// * `burn_id` - Burn id of the coupon.
+#[update]
+async fn get_coupon(burn_id: u64) -> Result<Coupon, WithdrawError> {
+    let caller = validate_caller_not_anonymous();
+
+    get_or_regen_coupon(caller, burn_id).await
+}
+
+/// Returns ledger id.
+#[query]
+async fn get_withdraw_info() -> UserWithdrawInfo {
+    let caller = validate_caller_not_anonymous();
+
+    get_user_withdraw_info(caller).await
+}
+
+/// Returns ledger id.
+#[query]
+async fn get_ledger_id() -> String {
+    read_state(|s| s.ledger_id.clone().to_string())
+}
+
+/// Verification method that validates coupon.
+#[query]
+async fn verify(coupon: Coupon) -> Result<bool, CouponError> {
+    coupon.verify()
+}
+
 /// Cleans up the HTTP response headers to make them deterministic.
 ///
 /// # Arguments
@@ -197,18 +232,6 @@ fn get_storage() -> String {
 #[query]
 fn get_active_tasks() {
     read_state(|s| ic_canister_log::log!(INFO, "active_tasks: {:?}", s.active_tasks));
-}
-
-/// Returns ledger id.
-#[query]
-async fn get_ledger_id() -> String {
-    read_state(|s| s.ledger_id.clone().to_string())
-}
-
-/// Verification method that validates coupon.
-#[query]
-async fn verify(coupon: Coupon) -> Result<bool, CouponError> {
-    coupon.verify()
 }
 
 fn main() {}
