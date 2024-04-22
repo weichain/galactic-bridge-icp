@@ -204,6 +204,8 @@ fn cleanup_response(mut args: TransformArgs) -> HttpResponse {
 /// Returns the current state of the Minter canister.
 #[query]
 fn get_state() -> String {
+    is_controller();
+
     read_state(|s| {
         ic_canister_log::log!(INFO, "state: {:?}", s);
         s.to_string()
@@ -213,6 +215,8 @@ fn get_state() -> String {
 /// Returns the storage events recorded in the Minter canister.
 #[query]
 fn get_storage() -> String {
+    is_controller();
+
     use std::fmt::Write;
 
     let events = minter::storage::get_storage_events();
@@ -231,6 +235,8 @@ fn get_storage() -> String {
 /// Returns active tasks in the Minter canister.
 #[query]
 fn get_active_tasks() {
+    is_controller();
+
     read_state(|s| ic_canister_log::log!(INFO, "active_tasks: {:?}", s.active_tasks));
 }
 
@@ -242,5 +248,14 @@ fn validate_caller_not_anonymous() -> candid::Principal {
     if principal == candid::Principal::anonymous() {
         panic!("anonymous principal is not allowed");
     }
+    principal
+}
+
+fn is_controller() -> candid::Principal {
+    let principal = ic_cdk::caller();
+    if !ic_cdk::api::is_controller(&principal) {
+        ic_cdk::trap("only controller can call this method");
+    }
+
     principal
 }
