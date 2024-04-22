@@ -346,7 +346,7 @@ pub async fn mint_gsol() {
                     owner: event.to_icp_address,
                     subaccount: None,
                 },
-                amount: candid::Nat::from(event.amount),
+                amount: event.amount.clone(),
                 fee: None,
                 created_at_time: Some(ic_cdk::api::time()),
                 // Memo is limited to 32 bytes in size, so can't fit much in there

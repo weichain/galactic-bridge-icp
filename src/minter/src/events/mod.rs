@@ -1,7 +1,8 @@
 use crate::withdraw::Coupon;
 
-use candid::Principal;
+use candid::{Nat, Principal};
 use minicbor::{Decode, Encode};
+use num_bigint::BigUint;
 use serde::Serialize;
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Encode, Decode, Serialize)]
@@ -78,8 +79,8 @@ pub struct DepositEvent {
     pub from_sol_address: String,
     #[cbor(n(2), with = "crate::cbor::principal")]
     pub to_icp_address: Principal,
-    #[n(3)]
-    pub amount: u64,
+    #[cbor(n(3), with = "crate::cbor::nat")]
+    pub amount: Nat,
     #[n(4)]
     pub sol_sig: String,
     #[n(5)]
@@ -94,9 +95,11 @@ impl DepositEvent {
 
         let bytes = BASE64_STANDARD.decode(encode_data).unwrap();
         let amount_bytes = &bytes[bytes.len() - 8..];
-        let mut value: u64 = 0;
+        let mut value: BigUint = BigUint::default(); // Initialize BigUint to 0
         for i in 0..8 {
-            value |= (amount_bytes[i] as u64) << (i * 8);
+            let byte_as_u64 = amount_bytes[i] as u64;
+            let shifted_value = BigUint::from(byte_as_u64) << (i * 8); // Shifted byte value as BigUint
+            value |= &shifted_value;
         }
 
         let address_bytes = &bytes[12..bytes.len() - 8];
@@ -107,7 +110,7 @@ impl DepositEvent {
             id: deposit_id,
             from_sol_address: from_address.to_string(),
             to_icp_address: principal,
-            amount: value,
+            amount: Nat::from(value),
             sol_sig: sol_sig.to_string(),
             icp_mint_block_index: None,
             retry: Retriable(0),
@@ -129,8 +132,8 @@ pub struct WithdrawalEvent {
     pub from_icp_address: Principal,
     #[n(2)]
     pub to_sol_address: String,
-    #[n(3)]
-    pub amount: u64,
+    #[cbor(n(3), with = "crate::cbor::nat")]
+    pub amount: Nat,
     #[n(0)]
     burn_id: u64,
     #[n(4)]
@@ -146,7 +149,7 @@ pub struct WithdrawalEvent {
 }
 
 impl WithdrawalEvent {
-    pub fn new(burn_id: u64, from: Principal, to_sol_address: String, amount: u64) -> Self {
+    pub fn new(burn_id: u64, from: Principal, to_sol_address: String, amount: Nat) -> Self {
         WithdrawalEvent {
             from_icp_address: from,
             to_sol_address,

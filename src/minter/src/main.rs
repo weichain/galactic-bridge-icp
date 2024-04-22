@@ -144,15 +144,7 @@ async fn withdraw(
     let caller = validate_caller_not_anonymous();
     is_over_limit(&withdraw_amount.0);
 
-    withdraw_gsol(
-        caller,
-        solana_address,
-        withdraw_amount
-            .0
-            .to_u64()
-            .expect("withdraw amount should fit into u64"),
-    )
-    .await
+    withdraw_gsol(caller, solana_address, withdraw_amount).await
 }
 
 /// Gets coupon or tries to regenerate coupon if it is not found.

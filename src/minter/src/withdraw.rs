@@ -8,6 +8,7 @@ use crate::{
 };
 
 use candid::CandidType;
+use candid::Nat;
 use candid::Principal;
 use ic_cdk::api::{
     call::RejectionCode,
@@ -137,7 +138,7 @@ pub async fn get_withdraw_info(user: Principal) -> UserWithdrawInfo {
 pub async fn withdraw_gsol(
     from: Principal,
     to: String,
-    amount: u64,
+    amount: Nat,
 ) -> Result<Coupon, WithdrawError> {
     let _guard = retrieve_sol_guard(from).unwrap_or_else(|e| {
         ic_cdk::trap(&format!(
@@ -184,7 +185,7 @@ pub async fn get_coupon(from: Principal, burn_id: u64) -> Result<Coupon, Withdra
 async fn burn_gsol(
     from: &Principal,
     to: &String,
-    amount: u64,
+    amount: Nat,
 ) -> Result<WithdrawalEvent, WithdrawError> {
     let mut event = WithdrawalEvent::new(
         mutate_state(State::next_burn_id),
@@ -203,7 +204,7 @@ async fn burn_gsol(
         spender_subaccount: None,
         from: event.from_icp_address.into(),
         to: ic_cdk::id().into(),
-        amount: candid::Nat::from(event.amount),
+        amount: event.amount.clone(),
         fee: None,
         created_at_time: Some(ic_cdk::api::time()),
         memo: Some(LedgerMemo(event.get_burn_id()).into()),
