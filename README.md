@@ -113,6 +113,11 @@ Coupon Example:
 ```
 No matter who executes the withdrawal process on the Solana side, the asset will be reimbursed to the Solana address provided during the minter canister call.
 
+## get_withdraw_info
+```bash
+dfx canister call minter get_withdraw_info  --identity $USER_PRINCIPAL_NAME
+```
+
 ## get_state
 
 ```bash
