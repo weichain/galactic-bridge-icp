@@ -18,6 +18,7 @@ use minter::{
 use candid::candid_method;
 use ic_cdk::api::management_canister::http_request::{HttpResponse, TransformArgs};
 use ic_cdk_macros::{init, post_upgrade, pre_upgrade, query, update};
+use num_bigint::BigUint;
 use num_traits::cast::ToPrimitive;
 use std::time::Duration;
 
@@ -141,6 +142,7 @@ async fn withdraw(
     withdraw_amount: candid::Nat,
 ) -> Result<Coupon, WithdrawError> {
     let caller = validate_caller_not_anonymous();
+    is_over_limit(&withdraw_amount.0);
 
     withdraw_gsol(
         caller,
@@ -246,7 +248,7 @@ ic_cdk_macros::export_candid!();
 fn validate_caller_not_anonymous() -> candid::Principal {
     let principal = ic_cdk::caller();
     if principal == candid::Principal::anonymous() {
-        panic!("anonymous principal is not allowed");
+        ic_cdk::trap("anonymous principal is not allowed");
     }
     principal
 }
@@ -258,4 +260,15 @@ fn is_controller() -> candid::Principal {
     }
 
     principal
+}
+
+fn is_over_limit(withdraw_amount: &BigUint) {
+    let minimum = read_state(|s| s.minimum_withdrawal_amount.clone());
+
+    match minimum.cmp(&withdraw_amount) {
+        std::cmp::Ordering::Greater => {
+            ic_cdk::trap("withdraw amount is less than minimum withdrawal amount");
+        }
+        _ => {}
+    }
 }
