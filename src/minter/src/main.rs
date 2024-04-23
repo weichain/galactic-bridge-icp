@@ -19,7 +19,6 @@ use candid::candid_method;
 use ic_cdk::api::management_canister::http_request::{HttpResponse, TransformArgs};
 use ic_cdk_macros::{init, post_upgrade, pre_upgrade, query, update};
 use num_bigint::BigUint;
-use num_traits::cast::ToPrimitive;
 use std::time::Duration;
 
 /// Sets up timers for various tasks, such as fetching latest signatures and scraping logs.

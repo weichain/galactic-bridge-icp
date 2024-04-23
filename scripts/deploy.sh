@@ -91,9 +91,9 @@ if $CREATE_MINTER; then
     --argument "
       (variant {
         Init = record {
-          solana_network = variant { Testnet };
-          solana_contract_address = \"AAJL4DeXnWBNRowWjvpkAgwtAACpz6NfaA1T2p8Hrpy\";
-          solana_initial_signature = \"33Mgkv8i55QPoRth1aqB8uUxemGdF1vc6uPVNrwQzopfX5AwvzN2oV5wSkA8gQD1Er9jAs3EMgkxDj4jkjnCoUrT\";
+          solana_rpc_url = \"https://";
+          solana_contract_address = \"\";
+          solana_initial_signature = \"\";
           ecdsa_key_name = \"test_key_1\";
           ledger_id = principal \"$(dfx canister id ledger --network="$NETWORK")\";
           minimum_withdrawal_amount = 100;

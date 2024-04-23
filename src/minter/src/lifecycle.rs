@@ -13,7 +13,7 @@ use std::fmt::{Display, Formatter};
 #[derive(CandidType, Deserialize, Clone, Debug, Encode, Decode, PartialEq, Eq)]
 pub struct InitArg {
     #[n(0)]
-    pub solana_network: SolanaNetwork,
+    pub solana_rpc_url: SolanaRpcUrl,
     #[n(1)]
     pub solana_contract_address: String,
     #[n(2)]
@@ -30,7 +30,7 @@ impl TryFrom<InitArg> for State {
     type Error = InvalidStateError;
     fn try_from(
         InitArg {
-            solana_network,
+            solana_rpc_url,
             solana_contract_address,
             solana_initial_signature,
             ecdsa_key_name,
@@ -45,7 +45,7 @@ impl TryFrom<InitArg> for State {
         )?;
 
         let state = Self {
-            solana_network,
+            solana_rpc_url,
             solana_contract_address,
             solana_initial_signature,
             ecdsa_key_name,
@@ -75,12 +75,14 @@ impl TryFrom<InitArg> for State {
 #[derive(CandidType, Deserialize, Clone, Debug, Default, Encode, Decode, PartialEq, Eq)]
 pub struct UpgradeArg {
     #[n(0)]
-    pub solana_contract_address: Option<String>,
+    pub solana_rpc_url: Option<SolanaRpcUrl>,
     #[n(1)]
-    pub solana_initial_signature: Option<String>,
+    pub solana_contract_address: Option<String>,
     #[n(2)]
+    pub solana_initial_signature: Option<String>,
+    #[n(3)]
     pub ecdsa_key_name: Option<String>,
-    #[cbor(n(3), with = "crate::cbor::nat::option")]
+    #[cbor(n(4), with = "crate::cbor::nat::option")]
     pub minimum_withdrawal_amount: Option<Nat>,
 }
 
@@ -112,23 +114,17 @@ pub enum MinterArg {
     Upgrade(UpgradeArg),
 }
 
-#[derive(
-    CandidType, Clone, Copy, Default, Deserialize, Debug, Eq, PartialEq, Hash, Encode, Decode,
-)]
-#[cbor(index_only)]
-pub enum SolanaNetwork {
-    #[n(1)]
-    Mainnet,
-    #[n(2)]
-    #[default]
-    Testnet,
+#[derive(CandidType, Clone, Default, Deserialize, Debug, Eq, PartialEq, Hash, Encode, Decode)]
+pub struct SolanaRpcUrl(#[n(1)] String);
+
+impl SolanaRpcUrl {
+    pub fn get(&self) -> &str {
+        &self.0
+    }
 }
 
-impl Display for SolanaNetwork {
+impl Display for SolanaRpcUrl {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            SolanaNetwork::Mainnet => write!(f, "Solana Mainnet"),
-            SolanaNetwork::Testnet => write!(f, "Solana Testnet"),
-        }
+        write!(f, "{}", self.0)
     }
 }

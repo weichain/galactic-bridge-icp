@@ -14,9 +14,9 @@ type CouponError = variant {
 type InitArg = record {
   ecdsa_key_name : text;
   solana_initial_signature : text;
-  solana_network : SolanaNetwork;
   ledger_id : principal;
   solana_contract_address : text;
+  solana_rpc_url : text;
   minimum_withdrawal_amount : nat;
 };
 type MinterArg = variant { Upgrade : UpgradeArg; Init : InitArg };
@@ -31,7 +31,6 @@ type RejectionCode = variant {
 };
 type Result = variant { Ok : Coupon; Err : WithdrawError };
 type Result_1 = variant { Ok : bool; Err : CouponError };
-type SolanaNetwork = variant { Mainnet; Testnet };
 type TransferFromError = variant {
   GenericError : record { message : text; error_code : nat };
   TemporarilyUnavailable;
@@ -47,6 +46,7 @@ type UpgradeArg = record {
   ecdsa_key_name : opt text;
   solana_initial_signature : opt text;
   solana_contract_address : opt text;
+  solana_rpc_url : opt text;
   minimum_withdrawal_amount : opt nat;
 };
 type UserWithdrawInfo = record { burn_ids : vec nat64; coupons : vec Coupon };

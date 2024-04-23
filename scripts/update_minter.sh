@@ -4,7 +4,7 @@
 dfx deploy minter --upgrade-unchanged --argument "
   (variant {
     Upgrade = record {
-      ecdsa_key_name = opt \"test_key_1\";
+      solana_rpc_url = opt \"\";
     }
   })
-" --yes --network=ic --identity="$DEPLOYER_PRINCIPAL_NAME"
+" --yes --identity="$OWNER_PRINCIPAL_NAME"
