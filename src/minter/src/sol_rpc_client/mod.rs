@@ -1,7 +1,6 @@
 use crate::{
-    lifecycle::SolanaNetwork,
+    lifecycle::SolanaRpcUrl,
     sol_rpc_client::{
-        providers::{RpcNodeProvider, MAINNET_PROVIDERS, TESTNET_PROVIDERS},
         requests::{GetSignaturesForAddressRequestOptions, GetTransactionRequestOptions},
         responses::{GetTransactionResponse, JsonRpcResponse, SignatureResponse},
         types::{
@@ -22,15 +21,13 @@ use icrc_ledger_types::icrc1::transfer::Memo;
 use serde_json::json;
 use std::collections::HashMap;
 
-mod providers;
 pub mod requests;
 pub mod responses;
 pub mod types;
 
-// TODO: support for multiple providers
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SolRpcClient {
-    chain: SolanaNetwork,
+    rpc_url: SolanaRpcUrl,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -65,19 +62,12 @@ impl std::fmt::Display for SolRpcError {
 }
 
 impl SolRpcClient {
-    const fn new(chain: SolanaNetwork) -> Self {
-        Self { chain }
+    const fn new(rpc_url: SolanaRpcUrl) -> Self {
+        Self { rpc_url }
     }
 
-    pub const fn from_state(state: &State) -> Self {
-        Self::new(state.solana_network())
-    }
-
-    fn providers(&self) -> &[RpcNodeProvider] {
-        match self.chain {
-            SolanaNetwork::Mainnet => &MAINNET_PROVIDERS,
-            SolanaNetwork::Testnet => &TESTNET_PROVIDERS,
-        }
+    pub fn from_state(state: &State) -> Self {
+        Self::new(state.solana_rpc_url())
     }
 
     async fn rpc_call(
@@ -94,7 +84,7 @@ impl SolRpcClient {
         let cycles = base_cycles * SUBNET_SIZE / BASE_SUBNET_SIZE;
 
         let request = CanisterHttpRequestArgument {
-            url: self.providers()[0].url().to_string(),
+            url: self.rpc_url.get().to_string(),
             max_response_bytes: Some(effective_size_estimate),
             method: HttpMethod::POST,
             headers: vec![HttpHeader {

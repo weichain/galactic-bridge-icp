@@ -9,13 +9,16 @@ use minter::{
     // sol_rpc_client::types::Error,
     state::{event::EventType, lazy_call_ecdsa_public_key, read_state, State, STATE},
     storage,
-    withdraw::{withdraw_gsol, Coupon, CouponError, WithdrawError},
+    withdraw::{
+        get_coupon as get_or_regen_coupon, get_withdraw_info as get_user_withdraw_info,
+        withdraw_gsol, Coupon, CouponError, UserWithdrawInfo, WithdrawError,
+    },
 };
 
 use candid::candid_method;
 use ic_cdk::api::management_canister::http_request::{HttpResponse, TransformArgs};
 use ic_cdk_macros::{init, post_upgrade, pre_upgrade, query, update};
-use num_traits::cast::ToPrimitive;
+use num_bigint::BigUint;
 use std::time::Duration;
 
 /// Sets up timers for various tasks, such as fetching latest signatures and scraping logs.
@@ -138,16 +141,41 @@ async fn withdraw(
     withdraw_amount: candid::Nat,
 ) -> Result<Coupon, WithdrawError> {
     let caller = validate_caller_not_anonymous();
+    is_over_limit(&withdraw_amount.0);
 
-    withdraw_gsol(
-        caller,
-        solana_address,
-        withdraw_amount
-            .0
-            .to_u64()
-            .expect("withdraw amount should fit into u64"),
-    )
-    .await
+    withdraw_gsol(caller, solana_address, withdraw_amount).await
+}
+
+/// Gets coupon or tries to regenerate coupon if it is not found.
+///
+/// # Arguments
+///
+/// * `burn_id` - Burn id of the coupon.
+#[update]
+async fn get_coupon(burn_id: u64) -> Result<Coupon, WithdrawError> {
+    let caller = validate_caller_not_anonymous();
+
+    get_or_regen_coupon(caller, burn_id).await
+}
+
+/// Returns ledger id.
+#[query]
+async fn get_withdraw_info() -> UserWithdrawInfo {
+    let caller = validate_caller_not_anonymous();
+
+    get_user_withdraw_info(caller).await
+}
+
+/// Returns ledger id.
+#[query]
+async fn get_ledger_id() -> String {
+    read_state(|s| s.ledger_id.clone().to_string())
+}
+
+/// Verification method that validates coupon.
+#[query]
+async fn verify(coupon: Coupon) -> Result<bool, CouponError> {
+    coupon.verify()
 }
 
 /// Cleans up the HTTP response headers to make them deterministic.
@@ -169,6 +197,8 @@ fn cleanup_response(mut args: TransformArgs) -> HttpResponse {
 /// Returns the current state of the Minter canister.
 #[query]
 fn get_state() -> String {
+    is_controller();
+
     read_state(|s| {
         ic_canister_log::log!(INFO, "state: {:?}", s);
         s.to_string()
@@ -178,6 +208,8 @@ fn get_state() -> String {
 /// Returns the storage events recorded in the Minter canister.
 #[query]
 fn get_storage() -> String {
+    is_controller();
+
     use std::fmt::Write;
 
     let events = minter::storage::get_storage_events();
@@ -196,19 +228,9 @@ fn get_storage() -> String {
 /// Returns active tasks in the Minter canister.
 #[query]
 fn get_active_tasks() {
+    is_controller();
+
     read_state(|s| ic_canister_log::log!(INFO, "active_tasks: {:?}", s.active_tasks));
-}
-
-/// Returns ledger id.
-#[query]
-async fn get_ledger_id() -> String {
-    read_state(|s| s.ledger_id.clone().to_string())
-}
-
-/// Verification method that validates coupon.
-#[query]
-async fn verify(coupon: Coupon) -> Result<bool, CouponError> {
-    coupon.verify()
 }
 
 fn main() {}
@@ -217,7 +239,27 @@ ic_cdk_macros::export_candid!();
 fn validate_caller_not_anonymous() -> candid::Principal {
     let principal = ic_cdk::caller();
     if principal == candid::Principal::anonymous() {
-        panic!("anonymous principal is not allowed");
+        ic_cdk::trap("anonymous principal is not allowed");
     }
     principal
+}
+
+fn is_controller() -> candid::Principal {
+    let principal = ic_cdk::caller();
+    if !ic_cdk::api::is_controller(&principal) {
+        ic_cdk::trap("only controller can call this method");
+    }
+
+    principal
+}
+
+fn is_over_limit(withdraw_amount: &BigUint) {
+    let minimum = read_state(|s| s.minimum_withdrawal_amount.clone());
+
+    match minimum.cmp(&withdraw_amount) {
+        std::cmp::Ordering::Greater => {
+            ic_cdk::trap("withdraw amount is less than minimum withdrawal amount");
+        }
+        _ => {}
+    }
 }

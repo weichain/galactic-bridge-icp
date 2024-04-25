@@ -1,6 +1,6 @@
 use crate::constants::DERIVATION_PATH;
 use crate::events::{DepositEvent, SolanaSignature, SolanaSignatureRange, WithdrawalEvent};
-use crate::lifecycle::{SolanaNetwork, UpgradeArg};
+use crate::lifecycle::{SolanaRpcUrl, UpgradeArg};
 
 use candid::Principal;
 use ic_cdk::api::management_canister::ecdsa::EcdsaPublicKeyResponse;
@@ -39,7 +39,7 @@ pub enum TaskType {
 #[derive(Debug, PartialEq, Clone)]
 pub struct State {
     // solana config
-    pub solana_network: SolanaNetwork,
+    pub solana_rpc_url: SolanaRpcUrl,
     pub solana_contract_address: String,
     pub solana_initial_signature: String,
 
@@ -117,11 +117,15 @@ impl State {
 
     fn upgrade(&mut self, upgrade_args: UpgradeArg) -> Result<(), InvalidStateError> {
         let UpgradeArg {
+            solana_rpc_url,
             solana_contract_address,
             solana_initial_signature,
             ecdsa_key_name,
             minimum_withdrawal_amount,
         } = upgrade_args;
+        if let Some(url) = solana_rpc_url {
+            self.solana_rpc_url = url;
+        }
         if let Some(address) = solana_contract_address {
             self.solana_contract_address = address;
         }
@@ -169,8 +173,8 @@ impl State {
         }
     }
 
-    pub const fn solana_network(&self) -> SolanaNetwork {
-        self.solana_network
+    pub fn solana_rpc_url(&self) -> SolanaRpcUrl {
+        self.solana_rpc_url.clone()
     }
 
     // STATE TRASNFORMATIONS
@@ -376,7 +380,7 @@ impl State {
 impl std::fmt::Display for State {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Format Solana config
-        writeln!(f, "Solana Network: {:?}", self.solana_network)?;
+        writeln!(f, "Solana RPC URL: {:?}", self.solana_rpc_url)?;
         writeln!(
             f,
             "Solana Contract Address: {}",
