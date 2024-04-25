@@ -33,7 +33,6 @@ icrc-ledger-client-cdk = { git = "https://github.com/dfinity/ic.git"}
 icrc-ledger-types = { git = "https://github.com/dfinity/ic.git"}
 ic-base-types = { git = "https://github.com/dfinity/ic.git"}
 
-# NEW
 ic-crypto-ecdsa-secp256k1 = { git = "https://github.com/dfinity/ic.git"}
 ic-stable-structures = "0.6.3"
 phantom_newtype = { git = "https://github.com/dfinity/ic.git"}
