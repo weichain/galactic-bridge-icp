@@ -140,7 +140,7 @@ pub struct WithdrawalEvent {
     burn_timestamp: Option<u64>,
     #[n(5)]
     icp_burn_block_index: Option<u64>,
-    #[n[6]]
+    #[n(6)]
     #[serde(skip_serializing)]
     coupon: Option<Coupon>,
     #[n(7)]
@@ -164,6 +164,14 @@ impl WithdrawalEvent {
 
     pub fn get_burn_id(&self) -> u64 {
         self.burn_id
+    }
+
+    pub fn get_burn_timestamp(&self) -> Option<u64> {
+        self.burn_timestamp
+    }
+
+    pub fn get_icp_burn_block_index(&self) -> Option<u64> {
+        self.icp_burn_block_index
     }
 
     pub fn update_after_burn(&mut self, timestamp: u64, block_index: u64) {

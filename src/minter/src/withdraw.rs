@@ -396,7 +396,17 @@ impl WithdrawalEvent {
 
     async fn sign_with_ecdsa(&self) -> Result<(String, String, String), (RejectionCode, String)> {
         // Serialize the coupon
-        let serialized_coupon: String = serde_json::to_string(self).unwrap();
+        let serialized_coupon: String = serde_json::to_string(&WithdrawalEventWithoutCbor {
+            from_icp_address: self.from_icp_address.clone(),
+            to_sol_address: self.to_sol_address.clone(),
+            amount: self.amount.to_string(),
+            burn_id: self.get_burn_id(),
+            burn_timestamp: self.get_burn_timestamp().unwrap(),
+            icp_burn_block_index: self.get_icp_burn_block_index().unwrap(),
+        })
+        .unwrap();
+
+        ic_canister_log::log!(DEBUG, "{serialized_coupon}");
 
         // Hash the serialized coupon using SHA-256
         let mut hasher = Sha256::new();
@@ -433,4 +443,14 @@ pub struct UserWithdrawInfo {
     pub coupons: Vec<Coupon>,
     #[n(1)]
     pub burn_ids: Vec<u64>,
+}
+
+#[derive(Serialize)]
+pub struct WithdrawalEventWithoutCbor {
+    pub from_icp_address: Principal,
+    pub to_sol_address: String,
+    pub amount: String,
+    pub burn_id: u64,
+    pub burn_timestamp: u64,
+    pub icp_burn_block_index: u64,
 }
