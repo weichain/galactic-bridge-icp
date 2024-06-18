@@ -2,7 +2,7 @@ use crate::{
     constants::{
         MINT_GSOL_RETRY_LIMIT, SOLANA_SIGNATURE_RANGES_RETRY_LIMIT, SOLANA_SIGNATURE_RETRY_LIMIT,
     },
-    events::{DepositEvent, SolanaSignature, SolanaSignatureRange},
+    events::{DepositEvent, DepositEventError, SolanaSignature, SolanaSignatureRange},
     guard::TimerGuard,
     logs::{DEBUG, INFO},
     sol_rpc_client::{responses::GetTransactionResponse, LedgerMemo, SolRpcClient, SolRpcError},
@@ -28,6 +28,7 @@ pub enum DepositError {
     NonDepositTransaction(String),
     MintingGSolFailed(TransferError),
     SendingMessageToLedgerFailed { id: String, code: i32, msg: String },
+    DepositEventFailed { sig: String, err: DepositEventError },
 }
 
 impl std::fmt::Display for DepositError {
@@ -56,6 +57,9 @@ impl std::fmt::Display for DepositError {
                     f,
                     "Failed to send a message to the ledger {id}: {code:?}: {msg}",
                 )
+            }
+            DepositError::DepositEventFailed { sig, err } => {
+                write!(f, "Signature {sig} : {err:?}")
             }
         }
     }
@@ -296,14 +300,24 @@ fn process_transaction_logs(
     {
         if let Some(program_data) = msgs.iter().find(|s| s.starts_with(program_data_msg)) {
             let base64_data = program_data.trim_start_matches(program_data_msg);
-            let deposit: DepositEvent = DepositEvent::new(
+            let deposit: Result<DepositEvent, DepositEventError> = DepositEvent::new(
                 mutate_state(State::next_deposit_id),
                 signature.as_str(),
                 solana_address.as_str(),
                 base64_data,
             );
 
-            return Ok(deposit);
+            match deposit {
+                Ok(deposit) => {
+                    return Ok(deposit);
+                }
+                Err(err) => {
+                    return Err(DepositError::DepositEventFailed {
+                        sig: signature.to_string(),
+                        err,
+                    });
+                }
+            }
         } else {
             return Err(DepositError::InvalidDepositData(signature.to_string()));
         }

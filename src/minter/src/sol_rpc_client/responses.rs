@@ -1,4 +1,5 @@
 use serde::Deserialize;
+use serde_json::Value;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct JsonRpcError {
@@ -20,7 +21,7 @@ pub struct SignatureResponse {
     pub block_time: u64,
     #[serde(rename = "confirmationStatus")]
     pub confirmation_status: String,
-    pub err: Option<String>,
+    pub err: Option<Value>,
     pub memo: Option<String>,
     pub signature: String,
     pub slot: u64,

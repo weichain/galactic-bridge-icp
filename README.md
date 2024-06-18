@@ -137,12 +137,25 @@ dfx canister call minter get_active_tasks --identity="$OWNER_PRINCIPAL_NAME"
 ```
 
 # Known Issues
-1) If the user's withdrawal process succeeds in burning gSOL but fails during signing, the user will not receive a coupon.
-   This issue is partially addressed by storing the burn transaction with a burn_id for easy referencing. However, there is
-   currently no API method provided for retrying coupon generation.
-2) Solana Testnet and Devnet do not retain transactions and transaction signatures for an extended period. This can lead to
+1) Solana Testnet and Devnet do not retain transactions and transaction signatures for an extended period. This can lead to
    issues in the Solana parser, such as encountering existing signatures without corresponding transaction data. Currently,
    any parsing issue encountered is retried up to 100 times before being dropped. It may be beneficial to implement a mechanism
    with progressively longer retry periods for improved handling of such issues.".
-3) Solana RPC provider free version has a request limit. At this point batching for transaction calls is not possible on mainnet!
+2) Solana RPC provider free version has a request limit. At this point batching for transaction calls is not possible on mainnet!
    Each call is duplicated 13 times for each node on the subnet.
+
+## MAINNET PUBLIC KEY - test_key_1
+
+"02449d7bbca9446df12f0f929c088edfec7223c339f5d98cb5b4055572a36c94f0"
+"04449d7bbca9446df12f0f929c088edfec7223c339f5d98cb5b4055572a36c94f0888809b30f7a499fcc0c2292c682fb3d7adc7656ef0d6d3f689a15ebee9c23cc"
+
+## MAINNET PUBLIC KEY - key_1
+
+"03c1ab9735077d400d7e992087ed3e09721ecd25d2238f5b6d0ec5f899aff090db"
+"04c1ab9735077d400d7e992087ed3e09721ecd25d2238f5b6d0ec5f899aff090db0f3c5b976ca2305440f31367e3b5c51cb58413de5962714ea41015812ed5069f"
+
+## LATEST SOLANA INITIAL SIGNATURE
+dhCUjkhdmEw18r1uNVxKanMyEXYmdcp56UBUmLXkgnPU8QFoHJYKy4UMrHLHk7oxUWXc13gvcL11ivCNJADaMJN
+
+## SOLANA CONTRACT ADDRESS
+AAJL4DeXnWBNRowWjvpkAgwtAACpz6NfaA1T2p8Hrpy

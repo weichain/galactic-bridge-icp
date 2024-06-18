@@ -71,6 +71,13 @@ impl std::fmt::Display for SolanaSignature {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DepositEventError {
+    InvalidBase64Data,
+    InvalidPrincipal,
+    // other variants if needed
+}
+
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Encode, Decode, Serialize)]
 pub struct DepositEvent {
     #[n(0)]
@@ -90,10 +97,17 @@ pub struct DepositEvent {
 }
 
 impl DepositEvent {
-    pub fn new(deposit_id: u64, sol_sig: &str, from_address: &str, encode_data: &str) -> Self {
+    pub fn new(
+        deposit_id: u64,
+        sol_sig: &str,
+        from_address: &str,
+        encode_data: &str,
+    ) -> Result<Self, DepositEventError> {
         use base64::prelude::*;
 
-        let bytes = BASE64_STANDARD.decode(encode_data).unwrap();
+        let bytes = BASE64_STANDARD
+            .decode(encode_data)
+            .map_err(|_| DepositEventError::InvalidBase64Data)?;
         let amount_bytes = &bytes[bytes.len() - 8..];
         let mut value: BigUint = BigUint::default(); // Initialize BigUint to 0
         for i in 0..8 {
@@ -104,9 +118,10 @@ impl DepositEvent {
 
         let address_bytes = &bytes[12..bytes.len() - 8];
         let address_hex = String::from_utf8_lossy(&address_bytes);
-        let principal = Principal::from_text(address_hex).unwrap();
+        let principal = Principal::from_text(address_hex.trim())
+            .map_err(|_| DepositEventError::InvalidPrincipal)?;
 
-        DepositEvent {
+        Ok(DepositEvent {
             id: deposit_id,
             from_sol_address: from_address.to_string(),
             to_icp_address: principal,
@@ -114,7 +129,7 @@ impl DepositEvent {
             sol_sig: sol_sig.to_string(),
             icp_mint_block_index: None,
             retry: Retriable(0),
-        }
+        })
     }
 
     pub fn update_mint_block_index(&mut self, block_index: u64) {

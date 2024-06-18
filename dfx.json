@@ -1,7 +1,7 @@
 {
   "version": 1,
   "output_env_file": ".env",
-  "dfx": "0.16.1",
+  "dfx": "0.15.0",
   "canisters": {
     "minter": {
       "type": "rust",
