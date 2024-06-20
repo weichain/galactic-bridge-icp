@@ -91,7 +91,7 @@ if $CREATE_MINTER; then
     --argument "
       (variant {
         Init = record {
-          solana_rpc_url = \"https://";
+          solana_rpc_url = \"https://\";
           solana_contract_address = \"\";
           solana_initial_signature = \"\";
           ecdsa_key_name = \"test_key_1\";
